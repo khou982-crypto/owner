@@ -1,0 +1,1337 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="自我管理台账">
+<title>自我管理台账</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+  :root{
+    --bg:#F7F7F5;
+    --bg-grouped:#EFEFED;
+    --surface:#FFFFFF;
+    --hairline:rgba(28,28,30,0.08);
+    --hairline-strong:rgba(28,28,30,0.14);
+    --ink:#1C1C1E;
+    --ink-2:#8A8A8E;
+    --ink-3:#C7C7CC;
+    --accent:#5B5A8C;
+    --accent-deep:#403F6B;
+    --accent-tint:#ECEBF5;
+    --danger:#C24545;
+    --danger-tint:#F8E9E9;
+    --good:#5C8368;
+    --good-tint:#E7EFE9;
+    --radius-lg:20px;
+    --radius-md:14px;
+    --radius-sm:10px;
+    --shadow-card:0 1px 2px rgba(28,28,30,0.04), 0 8px 20px rgba(28,28,30,0.05);
+    --shadow-float:0 10px 30px rgba(64,63,107,0.28);
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:#DEDEDA;
+    font-family:-apple-system,"SF Pro Display","SF Pro Text","PingFang SC",BlinkMacSystemFont,sans-serif;
+    font-weight:400; line-height:1.45; color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+    display:flex; justify-content:center; min-height:100vh;
+  }
+  .mono{ font-family:'IBM Plex Mono', monospace; font-variant-numeric:tabular-nums; }
+
+  .phone{
+    width:100%; max-width:430px; min-height:100vh; background:var(--bg);
+    position:relative; overflow-x:hidden; box-shadow:0 0 60px rgba(0,0,0,0.18);
+    padding-top:env(safe-area-inset-top);
+  }
+
+  .topbar{ padding:18px 20px 4px; position:sticky; top:0; background:var(--bg); z-index:20; }
+  .topbar h1{ font-size:28px; font-weight:600; letter-spacing:0; line-height:1.25; margin:0 0 4px; }
+  .topbar .sub{ color:var(--ink-2); font-size:13px; font-weight:400; line-height:1.4; margin-bottom:12px; }
+  .topbar .sub b{ color:var(--ink); font-weight:600; }
+
+  .view{ display:none; padding-bottom:104px; }
+  .view.active{ display:block; }
+
+  /* ---- date/day strip (shared) ---- */
+  .day-strip{ display:flex; gap:8px; padding:2px 20px 16px; overflow-x:auto; scrollbar-width:none; }
+  .day-strip::-webkit-scrollbar{ display:none; }
+  .day-pill{ flex:0 0 auto; width:46px; padding:9px 0 8px; border-radius:16px; text-align:center; background:var(--surface); border:1px solid var(--hairline); cursor:pointer; }
+  .day-pill .dmonth{ font-size:8.5px; font-weight:700; color:var(--accent-deep); height:11px; line-height:11px; margin-bottom:1px; }
+  .day-pill.selected .dmonth{ color:#fff; }
+  .day-pill .dlabel{ font-size:11px; font-weight:500; color:var(--ink-2); }
+  .day-pill .dnum{ font-size:14px; font-weight:600; margin-top:2px; font-family:'IBM Plex Mono',monospace; }
+  .day-pill .ddot{ width:4px; height:4px; border-radius:50%; margin:4px auto 0; background:transparent; }
+  .day-pill.has-item .ddot{ background:var(--accent); }
+  .day-pill.is-today{ border-color:var(--accent); }
+  .day-pill.is-today .dlabel{ color:var(--accent-deep); }
+  .day-pill.selected{ background:var(--ink); border-color:var(--ink); }
+  .day-pill.selected .dlabel, .day-pill.selected .dnum{ color:#fff; }
+  .day-pill.selected .ddot{ background:#fff; }
+
+  /* ---- summary card (fixed to real "today", independent of day-strip selection) ---- */
+  .summary-row{ display:flex; gap:10px; padding:0 20px 18px; }
+  .summary-tile{ flex:1; background:var(--surface); border-radius:14px; padding:13px 14px; box-shadow:var(--shadow-card); min-width:0; }
+  .summary-tile .st-label{ font-size:10.5px; color:var(--ink-2); font-weight:500; letter-spacing:0.02em; margin-bottom:6px; }
+  .summary-tile .st-value{ font-size:15.5px; font-weight:600; letter-spacing:0; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .summary-tile .st-sub{ font-size:11px; color:var(--ink-2); margin-top:3px; }
+  .progress-bar{ height:5px; border-radius:3px; background:var(--bg-grouped); margin-top:9px; overflow:hidden; }
+  .progress-bar-fill{ height:100%; background:var(--good); border-radius:3px; }
+
+  /* ---- month view ---- */
+  .month-toggle-btn{ font-size:12px; font-weight:500; color:var(--accent-deep); background:var(--accent-tint); border:none; border-radius:20px; padding:6px 12px; cursor:pointer; }
+  #monthToggleBtn{ background:none; font-size:20px; padding:4px 6px; }
+  .month-header{ display:flex; align-items:center; justify-content:space-between; padding:4px 20px 16px; }
+  .month-nav-btn{ background:var(--surface); border:1px solid var(--hairline-strong); border-radius:8px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; font-size:16px; color:var(--ink-2); cursor:pointer; }
+  .month-title{ font-size:16px; font-weight:600; letter-spacing:0; }
+  .month-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:5px; padding:0 20px 16px; }
+  .month-weekday-label{ text-align:center; font-size:10.5px; color:var(--ink-2); font-weight:500; padding-bottom:6px; }
+  .month-cell{ position:relative; aspect-ratio:1/1; border-radius:10px; background:var(--surface); border:1px solid var(--hairline); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; cursor:pointer; overflow:hidden; }
+  .month-cell.other-month{ opacity:0.32; }
+  .month-cell.is-today{ border-color:var(--accent); border-width:1.5px; }
+  .month-cell.is-selected{ background:var(--bg-grouped); border-color:var(--ink); }
+  .month-cell.fit-marked::after{ content:""; position:absolute; left:0; right:0; bottom:0; height:3px; background:var(--good); }
+  .month-daynum{ font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; }
+  .month-dots{ display:flex; gap:3px; align-items:center; }
+  .month-dot{ width:5px; height:5px; border-radius:50%; display:inline-block; }
+  .month-tasknum{ font-size:9px; font-weight:600; color:var(--ink-2); background:var(--bg-grouped); border-radius:6px; padding:0 4px; line-height:1.3; }
+
+  .fitness-chart-card{ margin:0 20px; background:var(--surface); border-radius:var(--radius-md); padding:16px; box-shadow:var(--shadow-card); }
+  .fc-stat-row{ display:flex; gap:26px; margin-bottom:16px; }
+  .fc-num{ font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:600; letter-spacing:-0.01em; }
+  .fc-label{ font-size:11px; color:var(--ink-2); margin-top:2px; }
+  .fc-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:5px; }
+  .fc-weekday{ text-align:center; font-size:9.5px; color:var(--ink-2); padding-bottom:4px; }
+  .fc-cell{ aspect-ratio:1/1; border-radius:6px; background:var(--bg-grouped); display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--ink-3); }
+  .fc-cell.marked{ background:var(--good); color:#fff; font-weight:600; }
+  .fc-cell.is-today{ box-shadow:inset 0 0 0 1.5px var(--accent); }
+  .fc-cell.other-month{ opacity:0.22; }
+
+  /* ---- health block (overview) ---- */
+  .fitness-toggle-row{ margin:0 20px 14px; display:flex; gap:10px; }
+  .fitness-btn{ flex:1; padding:12px 0; border-radius:12px; text-align:center; font-size:13.5px; font-weight:600; border:1px solid var(--hairline-strong); background:var(--surface); color:var(--ink-2); cursor:pointer; }
+  .fitness-btn.on{ background:var(--accent-tint); border-color:var(--accent); color:var(--accent-deep); }
+  .supp-check-row{ display:flex; align-items:center; gap:11px; padding:12px 14px; border-bottom:1px solid var(--hairline); }
+  .supp-check-row:last-child{ border-bottom:none; }
+  .supp-name{ flex:1; font-size:14px; font-weight:500; }
+  .supp-name.done{ color:var(--ink-3); text-decoration:line-through; }
+  .supp-tag{ font-size:10px; color:var(--ink-2); background:var(--bg-grouped); padding:2px 8px; border-radius:20px; margin-left:6px; }
+  .meal-row{ display:flex; align-items:center; gap:10px; padding:11px 14px; border-bottom:1px solid var(--hairline); }
+  .meal-row:last-child{ border-bottom:none; }
+  .meal-label{ width:40px; flex-shrink:0; font-size:12px; color:var(--ink-2); font-weight:500; }
+  .meal-input{ flex:1; border:none; background:none; font-size:13.5px; color:var(--ink); font-family:-apple-system,"SF Pro Text",sans-serif; padding:0; }
+  .meal-input:focus{ outline:none; }
+  .meal-input::placeholder{ color:var(--ink-3); }
+
+  /* ---- section ---- */
+  .section-head{ display:flex; align-items:center; justify-content:space-between; padding:22px 20px 10px; }
+  .section-head h2{ font-size:12.5px; font-weight:600; color:var(--ink-2); text-transform:uppercase; letter-spacing:0.05em; margin:0; }
+
+  /* ---- timeline card (courses) ---- */
+  .timeline{ padding:0 20px; }
+  .tl-item{ display:flex; gap:12px; margin-bottom:10px; }
+  .tl-time{ width:44px; flex-shrink:0; padding-top:14px; text-align:right; font-size:11.5px; color:var(--ink-2); line-height:1.5; }
+  .tl-card{ flex:1; background:var(--surface); border-radius:var(--radius-md); padding:13px 14px; box-shadow:var(--shadow-card); border-left:3px solid var(--accent); min-width:0; }
+  .tl-card .c-name{ font-size:15px; font-weight:600; letter-spacing:0; line-height:1.35; }
+  .tl-card .c-meta{ font-size:12.5px; font-weight:400; color:var(--ink-2); margin-top:3px; line-height:1.4; }
+
+  .empty-block{ margin:6px 20px 4px; padding:26px 20px; background:var(--surface); border-radius:var(--radius-md); text-align:center; color:var(--ink-2); font-size:13px; font-weight:400; line-height:1.45; box-shadow:var(--shadow-card); }
+
+  /* ---- task rows (day view checklist) ---- */
+  .task-list{ margin:0 20px; background:var(--surface); border-radius:var(--radius-md); overflow:hidden; box-shadow:var(--shadow-card); }
+  .task-row{ display:flex; align-items:flex-start; gap:11px; padding:13px 14px; border-bottom:1px solid var(--hairline); }
+  .task-row:last-child{ border-bottom:none; }
+  .t-check{ width:21px; height:21px; border-radius:50%; border:1.6px solid var(--ink-3); flex-shrink:0; margin-top:1px; cursor:pointer; display:flex; align-items:center; justify-content:center; background:var(--surface); }
+  .t-check.done{ background:var(--good); border-color:var(--good); }
+  .t-check.done::after{ content:"✓"; color:#fff; font-size:12px; font-weight:700; }
+  .t-body{ flex:1; min-width:0; }
+  .t-title{ font-size:14.5px; font-weight:500; letter-spacing:0; line-height:1.35; }
+  .t-title.done{ color:var(--ink-3); text-decoration:line-through; }
+  .t-meta{ display:flex; flex-wrap:wrap; gap:6px; margin-top:5px; }
+  .chip{ font-size:10.5px; font-weight:500; padding:3px 8px; border-radius:20px; background:var(--bg-grouped); color:var(--ink-2); }
+  .chip.course{ background:var(--accent-tint); color:var(--accent-deep); }
+  .chip.priority-高{ background:var(--danger-tint); color:var(--danger); }
+  .chip.priority-中{ background:#FBF1DC; color:#8a6a1f; }
+  .chip.priority-低{ background:var(--bg-grouped); color:var(--ink-2); }
+
+  /* ---- course/task management list ---- */
+  .mgmt-list{ margin:0 20px; background:var(--surface); border-radius:var(--radius-md); overflow:hidden; box-shadow:var(--shadow-card); }
+  .mgmt-row{ display:flex; align-items:center; gap:11px; padding:13px 14px; border-bottom:1px solid var(--hairline); cursor:pointer; }
+  .mgmt-row:last-child{ border-bottom:none; }
+  .c-dot{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+  .c-body{ flex:1; min-width:0; }
+  .c-title{ font-size:14.5px; font-weight:600; letter-spacing:0; line-height:1.35; }
+  .c-sub{ font-size:12px; font-weight:400; color:var(--ink-2); margin-top:2px; line-height:1.4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .chev{ color:var(--ink-3); font-size:16px; transition:transform 0.2s ease; flex-shrink:0; }
+  .mgmt-row.expanded .chev{ transform:rotate(90deg); }
+
+  .mgmt-detail{ padding:0 14px 16px; background:var(--bg-grouped); display:none; }
+  .mgmt-detail.open{ display:block; }
+  .cd-note{ font-size:11.5px; color:var(--accent-deep); background:var(--accent-tint); border-radius:8px; padding:8px 10px; margin:10px 0; line-height:1.4; }
+  .cd-section-head{ display:flex; align-items:center; justify-content:space-between; padding:4px 0 6px; font-size:11.5px; font-weight:600; color:var(--ink-2); text-transform:uppercase; letter-spacing:0.05em; }
+  .session-view-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px; background:var(--surface); border-radius:8px; margin-bottom:6px; font-size:12.5px; }
+  .session-view-row .sv-loc{ color:var(--ink-2); text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .assignment-row{ display:flex; align-items:center; gap:8px; padding:9px 10px; background:var(--surface); border-radius:8px; margin-bottom:6px; }
+  .assignment-row .a-title-input{ flex:1; border:none; background:none; font-size:13px; font-weight:500; color:var(--ink); font-family:-apple-system,"SF Pro Text",sans-serif; padding:0; min-width:0; }
+  .assignment-row .a-title-input:focus{ outline:none; }
+  .assignment-row .a-due-input{ border:1px solid var(--hairline); border-radius:6px; padding:4px 6px; font-size:11px; color:var(--ink-2); background:var(--bg); width:112px; }
+  .t-check.done ~ .a-title-input{ color:var(--ink-3); text-decoration:line-through; }
+  .session-chip{ display:flex; align-items:center; gap:8px; background:var(--surface); border-radius:10px; padding:9px 10px; margin-bottom:7px; font-size:12.5px; }
+  .session-chip select, .session-chip input{ font-family:'IBM Plex Mono',monospace; font-size:12px; border:1px solid var(--hairline); border-radius:7px; padding:5px 6px; background:var(--bg); color:var(--ink); min-width:0; }
+  .session-chip .s-loc{ flex:1; font-family:-apple-system,"SF Pro Text",sans-serif; }
+  .session-chip .s-del{ color:var(--danger); border:none; background:none; font-size:16px; padding:0 2px; cursor:pointer; }
+  .link-btn{ font-size:12.5px; color:var(--accent-deep); font-weight:600; background:none; border:none; padding:6px 0; cursor:pointer; }
+  .cd-actions{ display:flex; gap:10px; margin-top:10px; }
+  .cd-actions button{ flex:1; padding:9px 0; border-radius:9px; font-size:13px; font-weight:600; border:none; cursor:pointer; }
+  .cd-actions .del-btn{ background:var(--danger-tint); color:var(--danger); }
+  .detail-line{ font-size:12.5px; color:var(--ink-2); padding:8px 0 2px; line-height:1.5; }
+  .detail-line b{ color:var(--ink); font-weight:600; }
+
+  /* ---- fab ---- */
+  .fab-wrap{ position:fixed; left:0; right:0; bottom:88px; max-width:430px; margin:0 auto; pointer-events:none; z-index:30; height:0; }
+  .fab{ position:absolute; right:24px; bottom:0; width:56px; height:56px; border-radius:50%; background:var(--ink); color:#fff; border:none; font-size:26px; box-shadow:var(--shadow-float); display:flex; align-items:center; justify-content:center; cursor:pointer; pointer-events:auto; }
+
+  /* ---- tab bar ---- */
+  .tabbar-wrap{ position:fixed; left:0; right:0; bottom:0; max-width:430px; margin:0 auto; padding:0 16px calc(14px + env(safe-area-inset-bottom)); z-index:40; pointer-events:none; }
+  .tabbar{ pointer-events:auto; background:var(--surface); border-radius:26px; display:flex; box-shadow:0 4px 24px rgba(28,28,30,0.10), 0 1px 2px rgba(28,28,30,0.06); border:1px solid var(--hairline); padding:8px 6px; }
+  .tab-item{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; background:none; border:none; cursor:pointer; color:var(--ink-3); padding:4px 0; }
+  .tab-icon-wrap{ width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; transition:background 0.2s ease; }
+  .tab-item.active .tab-icon-wrap{ background:var(--accent); }
+  .tab-item svg{ width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+  .tab-item.active svg{ stroke:#fff; }
+  .tab-item span{ font-size:9.5px; font-weight:500; }
+  .tab-item.active{ color:var(--ink); }
+
+  /* ---- more view ---- */
+  .more-group{ margin:14px 20px 0; background:var(--surface); border-radius:var(--radius-md); overflow:hidden; box-shadow:var(--shadow-card); }
+  .more-row{ display:flex; align-items:center; justify-content:space-between; padding:14px; border-bottom:1px solid var(--hairline); }
+  .more-row:last-child{ border-bottom:none; }
+  .more-row .m-label{ font-size:14px; font-weight:400; line-height:1.4; }
+  .more-row .m-tag{ font-size:11px; color:var(--ink-2); background:var(--bg-grouped); padding:3px 9px; border-radius:20px; }
+  .more-row.export{ cursor:pointer; }
+  .more-row.export .m-label{ color:var(--accent-deep); }
+  .group-label{ margin:22px 20px 8px; font-size:12.5px; font-weight:600; color:var(--ink-2); text-transform:uppercase; letter-spacing:0.05em; }
+
+  /* ---- sheet ---- */
+  .sheet-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,0.32); z-index:50; opacity:0; pointer-events:none; transition:opacity 0.25s ease; }
+  .sheet-backdrop.open{ opacity:1; pointer-events:auto; }
+  .sheet{ position:fixed; left:0; right:0; bottom:0; max-width:430px; margin:0 auto; background:var(--surface); border-radius:22px 22px 0 0; z-index:51; transform:translateY(100%); transition:transform 0.3s cubic-bezier(.32,.72,0,1); max-height:88vh; display:flex; flex-direction:column; }
+  .sheet.open{ transform:translateY(0); }
+  .sheet-head{ display:flex; align-items:center; justify-content:space-between; padding:16px 16px 12px; border-bottom:1px solid var(--hairline); flex-shrink:0; }
+  .sheet-head .sh-btn{ background:none; border:none; font-size:15px; cursor:pointer; padding:4px 2px; }
+  .sheet-head .sh-cancel{ color:var(--ink-2); }
+  .sheet-head .sh-save{ color:var(--accent-deep); font-weight:700; }
+  .sheet-head .sh-title{ font-size:15px; font-weight:600; letter-spacing:0; }
+  .sheet-body{ padding:14px 16px 30px; overflow-y:auto; }
+
+  .f-group{ background:var(--bg-grouped); border-radius:var(--radius-md); overflow:hidden; margin-bottom:16px; }
+  .f-row{ padding:10px 14px; border-bottom:1px solid var(--hairline); }
+  .f-row:last-child{ border-bottom:none; }
+  .f-row label{ display:block; font-size:11.5px; color:var(--ink-2); margin-bottom:4px; font-weight:500; }
+  .f-row input, .f-row textarea, .f-row select{ width:100%; border:none; background:none; font-size:14.5px; color:var(--ink); padding:0; font-family:-apple-system,"SF Pro Text",sans-serif; font-weight:400; line-height:1.4; }
+  .f-row input:focus, .f-row textarea:focus, .f-row select:focus{ outline:none; }
+  .f-row textarea{ resize:vertical; min-height:44px; }
+  .color-row{ display:flex; gap:10px; padding-top:2px; }
+  .color-dot{ width:26px; height:26px; border-radius:50%; border:2px solid transparent; cursor:pointer; }
+  .color-dot.sel{ border-color:var(--ink); }
+
+  .chip-toggle-row{ display:flex; flex-wrap:wrap; gap:8px; padding-top:2px; }
+  .chip-toggle{ font-size:12.5px; font-weight:500; padding:6px 12px; border-radius:20px; background:var(--surface); border:1px solid var(--hairline-strong); color:var(--ink-2); cursor:pointer; }
+  .chip-toggle.sel{ background:var(--accent); border-color:var(--accent); color:#fff; }
+
+  .segmented{ display:flex; background:var(--surface); border-radius:9px; padding:3px; border:1px solid var(--hairline-strong); }
+  .segmented button{ flex:1; border:none; background:none; padding:7px 0; font-size:12.5px; font-weight:500; color:var(--ink-2); border-radius:6px; cursor:pointer; }
+  .segmented button.sel{ background:var(--accent); color:#fff; }
+
+  .toast{ position:absolute; left:50%; bottom:100px; transform:translateX(-50%) translateY(10px); background:var(--ink); color:#fff; padding:10px 18px; border-radius:12px; font-size:13px; opacity:0; pointer-events:none; transition:all 0.25s ease; z-index:60; white-space:nowrap; }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="phone" id="phone">
+
+  <!-- ===== OVERVIEW (DAY VIEW) ===== -->
+  <div class="view active" id="view-overview">
+    <div class="topbar">
+      <div style="display:flex; align-items:center; justify-content:space-between;">
+        <h1 id="ovTitle">今日安排</h1>
+        <div style="display:flex; gap:8px;">
+          <button class="month-toggle-btn" id="todayJumpBtn" style="display:none;">回到今天</button>
+          <button class="month-toggle-btn" id="monthToggleBtn">📅</button>
+        </div>
+      </div>
+      <div class="sub" id="ovStat"></div>
+    </div>
+
+    <div id="ovDayMode">
+      <div class="summary-row" id="summaryRow"></div>
+      <div class="day-strip" id="ovDayStrip"></div>
+
+      <div class="section-head"><h2>课程</h2></div>
+      <div id="ovCourses"></div>
+
+      <div class="section-head"><h2>任务</h2></div>
+      <div id="ovTasks"></div>
+
+      <div class="section-head"><h2>健康</h2></div>
+      <div id="ovHealth"></div>
+    </div>
+
+    <div id="ovMonthMode" style="display:none;">
+      <div class="month-header">
+        <button class="month-nav-btn" id="monthPrevBtn">‹</button>
+        <div class="month-title" id="monthTitle"></div>
+        <button class="month-nav-btn" id="monthNextBtn">›</button>
+      </div>
+      <div class="month-grid" id="monthGrid"></div>
+      <div style="padding:0 20px; display:flex; gap:14px; font-size:11px; color:var(--ink-2); flex-wrap:wrap;">
+        <div style="display:flex; align-items:center; gap:5px;">彩色数字=当天的第一门课（颜色对应课程）</div>
+        <div style="display:flex; align-items:center; gap:5px;"><span class="month-tasknum">3</span>=当天任务数量</div>
+        <div style="display:flex; align-items:center; gap:5px;">绿色底边=健身日</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== COURSES (MANAGEMENT) ===== -->
+  <div class="view" id="view-courses">
+    <div class="topbar">
+      <h1>课程管理</h1>
+      <div class="sub" id="courseStat"></div>
+    </div>
+    <div class="mgmt-list" id="courseList"></div>
+  </div>
+
+  <!-- ===== TASKS (MANAGEMENT) ===== -->
+  <div class="view" id="view-tasks">
+    <div class="topbar">
+      <h1>任务管理</h1>
+      <div class="sub" id="taskStat"></div>
+    </div>
+    <div class="section-head" style="padding-top:6px;"><h2>长期任务</h2></div>
+    <div class="mgmt-list" id="taskListLongterm"></div>
+    <div class="section-head"><h2>日常任务</h2></div>
+    <div class="mgmt-list" id="taskListDaily"></div>
+    <div class="section-head"><h2>一次性任务</h2></div>
+    <div class="mgmt-list" id="taskListOnce"></div>
+  </div>
+
+  <!-- ===== HEALTH (MANAGEMENT) ===== -->
+  <div class="view" id="view-health">
+    <div class="topbar">
+      <h1>健康管理</h1>
+      <div class="sub" id="healthStat"></div>
+    </div>
+    <div class="section-head"><h2>补充剂</h2></div>
+    <div class="mgmt-list" id="supplementList"></div>
+
+    <div class="section-head"><h2>锻炼记录</h2></div>
+    <div class="fitness-chart-card" id="fitnessChartCard"></div>
+  </div>
+
+  <!-- ===== MORE ===== -->
+  <div class="view" id="view-more">
+    <div class="topbar">
+      <h1>更多</h1>
+      <div class="sub">其余模块 & 数据管理</div>
+    </div>
+    <div class="group-label">即将推出的模块</div>
+    <div class="more-group" id="soonModules"></div>
+    <div class="group-label">数据</div>
+    <div class="more-group">
+      <div class="more-row export" id="exportJsonRow"><span class="m-label">导出 JSON（全部数据）</span><span class="chev">›</span></div>
+      <div class="more-row export" id="exportCoursesRow"><span class="m-label">导出 courses.csv</span><span class="chev">›</span></div>
+      <div class="more-row export" id="exportSessionsRow"><span class="m-label">导出 course_sessions.csv</span><span class="chev">›</span></div>
+      <div class="more-row export" id="exportTasksRow"><span class="m-label">导出 tasks.csv</span><span class="chev">›</span></div>
+      <div class="more-row export" id="exportCompletionsRow"><span class="m-label">导出 task_completions.csv</span><span class="chev">›</span></div>
+      <div class="more-row export" id="exportSuppRow"><span class="m-label">导出 supplements.csv</span><span class="chev">›</span></div>
+      <div class="more-row export" id="exportSuppLogRow"><span class="m-label">导出 supplement_logs.csv</span><span class="chev">›</span></div>
+      <div class="more-row export" id="exportFitnessRow"><span class="m-label">导出 fitness_days.csv</span><span class="chev">›</span></div>
+      <div class="more-row export" id="exportMealsRow"><span class="m-label">导出 meals.csv</span><span class="chev">›</span></div>
+    </div>
+  </div>
+
+  <div class="fab-wrap"><button class="fab" id="fabAdd">+</button></div>
+  <div class="tabbar-wrap"><div class="tabbar" id="tabbar"></div></div>
+
+  <!-- ===== ADD COURSE SHEET ===== -->
+  <div class="sheet-backdrop" id="sheetBackdrop"></div>
+  <div class="sheet" id="courseSheet">
+    <div class="sheet-head">
+      <button class="sh-btn sh-cancel" id="courseSheetCancel">取消</button>
+      <div class="sh-title">新建课程</div>
+      <button class="sh-btn sh-save" id="courseSheetSave">保存</button>
+    </div>
+    <div class="sheet-body">
+      <div class="f-group">
+        <div class="f-row"><label>课程名称</label><input id="f_c_name" placeholder="如：微积分"></div>
+        <div class="f-row"><label>授课老师</label><input id="f_c_instructor" placeholder="如：王老师"></div>
+        <div class="f-row"><label>默认上课地点</label><input id="f_c_location" placeholder="如：理科楼 302"></div>
+      </div>
+      <div class="f-group">
+        <div class="f-row"><label>学期开始日期</label><input type="date" id="f_c_start"></div>
+        <div class="f-row"><label>学期结束日期</label><input type="date" id="f_c_end"></div>
+      </div>
+      <div class="f-group"><div class="f-row"><label>颜色标记</label><div class="color-row" id="colorRow"></div></div></div>
+      <div class="f-group"><div class="f-row"><label>备注</label><textarea id="f_c_notes" placeholder="任何想记的额外信息"></textarea></div></div>
+    </div>
+  </div>
+
+  <!-- ===== ADD TASK SHEET ===== -->
+  <div class="sheet" id="taskSheet">
+    <div class="sheet-head">
+      <button class="sh-btn sh-cancel" id="taskSheetCancel">取消</button>
+      <div class="sh-title">新建任务</div>
+      <button class="sh-btn sh-save" id="taskSheetSave">保存</button>
+    </div>
+    <div class="sheet-body">
+      <div class="f-group">
+        <div class="f-row"><label>任务标题</label><input id="f_t_title" placeholder="如：交微积分作业"></div>
+        <div class="f-row"><label>分类（可留空）</label><input id="f_t_category" placeholder="如：学业 / 生活 / 健身"></div>
+        <div class="f-row"><label>关联课程（可不选）</label>
+          <select id="f_t_course"><option value="">不关联</option></select>
+        </div>
+      </div>
+      <div class="f-group">
+        <div class="f-row"><label>优先级</label>
+          <div class="chip-toggle-row" id="priorityRow"></div>
+        </div>
+      </div>
+      <div class="f-group">
+        <div class="f-row"><label>任务类型</label>
+          <div class="segmented" id="typeSegment">
+            <button data-type="longterm">长期任务</button>
+            <button data-type="daily">日常任务</button>
+            <button data-type="once" class="sel">一次性任务</button>
+          </div>
+        </div>
+        <div class="f-row" id="onceRow"><label>截止日期</label><input type="date" id="f_t_due"></div>
+        <div class="f-row" id="repeatRow" style="display:none;">
+          <label>重复星期（可多选）</label>
+          <div class="chip-toggle-row" id="repeatDaysRow"></div>
+        </div>
+        <div class="f-row" id="untilRow" style="display:none;"><label>重复至（可留空 = 一直重复）</label><input type="date" id="f_t_until"></div>
+      </div>
+      <div class="f-group"><div class="f-row"><label>备注</label><textarea id="f_t_notes" placeholder="任何想记的额外信息"></textarea></div></div>
+    </div>
+  </div>
+
+  <!-- ===== ADD SUPPLEMENT SHEET ===== -->
+  <div class="sheet" id="suppSheet">
+    <div class="sheet-head">
+      <button class="sh-btn sh-cancel" id="suppSheetCancel">取消</button>
+      <div class="sh-title">新建补充剂</div>
+      <button class="sh-btn sh-save" id="suppSheetSave">保存</button>
+    </div>
+    <div class="sheet-body">
+      <div class="f-group">
+        <div class="f-row"><label>名称</label><input id="f_s_name" placeholder="如：鱼油、肌酸"></div>
+        <div class="f-row"><label>服用规律</label>
+          <div class="segmented" id="suppTypeSegment">
+            <button data-type="daily" class="sel">每天</button>
+            <button data-type="workout_day">只在健身日</button>
+          </div>
+        </div>
+      </div>
+      <div class="f-group"><div class="f-row"><label>备注（可留空）</label><textarea id="f_s_notes" placeholder="剂量、服用方式等，你自己记得住就行"></textarea></div></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+(function(){
+  const DAYS = ['周一','周二','周三','周四','周五','周六','周日'];
+  const DAY_LETTER = ['一','二','三','四','五','六','日'];
+  const COLORS = ['#5B5A8C','#B5654A','#4C7A73','#A8763F','#7A5C7E','#5E6B7A'];
+  const PRIORITIES = ['无','低','中','高'];
+  const MODULES = [
+    {label:'Canvas 集成'}, {label:'出行计划'}, {label:'视频拍摄记录'}
+  ];
+  const TABS = [
+    {key:'overview', label:'总览', icon:['M4 11.5 12 4l8 7.5','M6 10.5V20h5v-5h2v5h5v-9.5'], soon:false},
+    {key:'courses', label:'课程', icon:['M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z','M4 10h16','M8 3v4','M16 3v4'], soon:false},
+    {key:'tasks', label:'任务', icon:['M5 5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z','M8.5 12l2.3 2.3L15.5 9.5'], soon:false},
+    {key:'health', label:'健康', icon:['M12 20s-7-4.3-9.3-8.4C.9 8 2.1 4.6 5.5 4.1c2-.3 3.6.8 4.4 2.2C10.7 4.9 12.4 3.8 14.4 4.1c3.4.5 4.6 3.9 2.9 7.5C19 15.7 12 20 12 20z'], soon:false},
+    {key:'more', label:'更多', icon:['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z','M8.3 12h.01','M12 12h.01','M15.7 12h.01'], soon:false},
+  ];
+
+  let state = { courses: [], sessions: [], tasks: [], completions: [], supplements: [], supplement_logs: [], fitness_days: [], meals: [], assignments: [] };
+  let selectedColor = COLORS[0];
+  let selectedPriority = '无';
+  let taskType = 'once';
+  let selectedRepeatDays = [];
+  let expandedCourseId = null;
+  let expandedTaskId = null;
+  let activeTab = 'overview';
+  let ovSelectedDate = fmtDate(new Date());
+  let monthViewOpen = false;
+  let currentMonthCursor = new Date();
+
+  const $ = sel => document.querySelector(sel);
+  const toastEl = $('#toast');
+  function toast(msg){ toastEl.textContent = msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'), 2000); }
+
+  function fmtDate(d){ const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; }
+  function weekdayOf(dateStr){ const d = new Date(dateStr+'T00:00:00'); return DAYS[(d.getDay()+6)%7]; }
+  function addDays(dateStr, n){ const d = new Date(dateStr+'T00:00:00'); d.setDate(d.getDate()+n); return fmtDate(d); }
+  function todayIndex(){ const d = new Date().getDay(); return (d+6)%7; }
+  function uid(p){ return p+'_'+Math.random().toString(36).slice(2,9); }
+  function esc(s){ return (s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+  function timeMin(t){ if(!t) return 0; const [h,m]=t.split(':').map(Number); return h*60+m; }
+
+  const LS_PREFIX = 'selfops_';
+  async function loadState(){
+    try{ const c = localStorage.getItem(LS_PREFIX+'courses'); state.courses = c ? JSON.parse(c) : []; }catch(e){ state.courses=[]; }
+    try{ const s = localStorage.getItem(LS_PREFIX+'sessions'); state.sessions = s ? JSON.parse(s) : []; }catch(e){ state.sessions=[]; }
+    try{ const t = localStorage.getItem(LS_PREFIX+'tasks'); state.tasks = t ? JSON.parse(t) : []; }catch(e){ state.tasks=[]; }
+    try{ const cp = localStorage.getItem(LS_PREFIX+'completions'); state.completions = cp ? JSON.parse(cp) : []; }catch(e){ state.completions=[]; }
+    try{ const sp = localStorage.getItem(LS_PREFIX+'supplements'); state.supplements = sp ? JSON.parse(sp) : []; }catch(e){ state.supplements=[]; }
+    try{ const sl = localStorage.getItem(LS_PREFIX+'supplement_logs'); state.supplement_logs = sl ? JSON.parse(sl) : []; }catch(e){ state.supplement_logs=[]; }
+    try{ const fd = localStorage.getItem(LS_PREFIX+'fitness_days'); state.fitness_days = fd ? JSON.parse(fd) : []; }catch(e){ state.fitness_days=[]; }
+    try{ const ml = localStorage.getItem(LS_PREFIX+'meals'); state.meals = ml ? JSON.parse(ml) : []; }catch(e){ state.meals=[]; }
+    try{ const ag = localStorage.getItem(LS_PREFIX+'assignments'); state.assignments = ag ? JSON.parse(ag) : []; }catch(e){ state.assignments=[]; }
+  }
+  async function saveState(){
+    try{
+      localStorage.setItem(LS_PREFIX+'courses', JSON.stringify(state.courses));
+      localStorage.setItem(LS_PREFIX+'sessions', JSON.stringify(state.sessions));
+      localStorage.setItem(LS_PREFIX+'tasks', JSON.stringify(state.tasks));
+      localStorage.setItem(LS_PREFIX+'completions', JSON.stringify(state.completions));
+      localStorage.setItem(LS_PREFIX+'supplements', JSON.stringify(state.supplements));
+      localStorage.setItem(LS_PREFIX+'supplement_logs', JSON.stringify(state.supplement_logs));
+      localStorage.setItem(LS_PREFIX+'fitness_days', JSON.stringify(state.fitness_days));
+      localStorage.setItem(LS_PREFIX+'meals', JSON.stringify(state.meals));
+      localStorage.setItem(LS_PREFIX+'assignments', JSON.stringify(state.assignments));
+    }catch(e){ toast('保存失败，请重试'); }
+  }
+
+
+  // ================= TAB BAR =================
+  function renderTabbar(){
+    const bar = $('#tabbar'); bar.innerHTML = '';
+    TABS.forEach(t=>{
+      const btn = document.createElement('button');
+      btn.className = 'tab-item' + (t.key===activeTab ? ' active':'');
+      btn.innerHTML = `<span class="tab-icon-wrap"><svg viewBox="0 0 24 24">${t.icon.map(d=>`<path d="${d}"/>`).join('')}</svg></span><span>${t.label}</span>`;
+      btn.onclick = ()=> switchTab(t);
+      bar.appendChild(btn);
+    });
+  }
+  function switchTab(t){
+    if(t.soon){ toast(`「${t.label}」模块还没开始搭建`); return; }
+    activeTab = t.key;
+    renderTabbar();
+    ['view-overview','view-courses','view-tasks','view-health','view-more'].forEach(id=>$('#'+id).classList.remove('active'));
+    $('#view-'+t.key).classList.add('active');
+    $('#fabAdd').style.display = (t.key==='courses' || t.key==='tasks' || t.key==='health') ? 'flex' : 'none';
+  }
+
+  function renderMore(){
+    $('#soonModules').innerHTML = MODULES.map(m=>`<div class="more-row"><span class="m-label">${m.label}</span><span class="m-tag">开发中</span></div>`).join('');
+  }
+
+  // ================= OVERVIEW (DAY VIEW) =================
+  function renderSummaryCard(){
+    const todayStr = fmtDate(new Date());
+    const wd = weekdayOf(todayStr);
+    const now = new Date();
+    const nowMin = now.getHours()*60+now.getMinutes();
+    const sessions = state.sessions.filter(s=>s.day_of_week===wd).sort((a,b)=>timeMin(a.start_time)-timeMin(b.start_time));
+    const next = sessions.find(s=>timeMin(s.end_time) >= nowMin);
+    const course = next ? state.courses.find(c=>c.course_id===next.course_id) : null;
+
+    const tasks = dayTasks(todayStr);
+    const done = tasks.filter(t=>isTaskDone(t.task_id, todayStr)).length;
+    const pct = tasks.length ? Math.round(done/tasks.length*100) : 0;
+
+    $('#summaryRow').innerHTML = `
+      <div class="summary-tile">
+        <div class="st-label">今天 · 下一节课</div>
+        <div class="st-value">${course ? esc(course.course_name) : (sessions.length? '今天课上完了':'今天没课')}</div>
+        <div class="st-sub">${next ? next.start_time+'–'+next.end_time : '&nbsp;'}</div>
+      </div>
+      <div class="summary-tile">
+        <div class="st-label">今天 · 任务进度</div>
+        <div class="st-value">${done} / ${tasks.length} 完成</div>
+        <div class="progress-bar"><div class="progress-bar-fill" style="width:${pct}%;"></div></div>
+      </div>
+    `;
+  }
+
+  function renderOverview(){
+    renderSummaryCard();
+    const strip = $('#ovDayStrip'); strip.innerHTML='';
+    const todayStr = fmtDate(new Date());
+    for(let off=-14; off<=60; off++){
+      const dateStr = addDays(todayStr, off);
+      const d = new Date(dateStr+'T00:00:00');
+      const wd = DAYS[(d.getDay()+6)%7];
+      const hasCourse = state.sessions.some(s=>s.day_of_week===wd);
+      const hasTask = dayTasks(dateStr).length>0;
+      const pill = document.createElement('div');
+      pill.className = 'day-pill'
+        + (dateStr===ovSelectedDate?' selected':'')
+        + (dateStr===todayStr?' is-today':'')
+        + ((hasCourse||hasTask)?' has-item':'');
+      const showMonth = (d.getDate()===1) || (off===-14);
+      pill.innerHTML = `<div class="dmonth">${showMonth?d.getMonth()+1+'月':''}</div><div class="dlabel">${DAY_LETTER[(d.getDay()+6)%7]}</div><div class="dnum mono">${d.getDate()}</div><div class="ddot"></div>`;
+      pill.onclick = ()=>{ ovSelectedDate = dateStr; renderOverview(); };
+      strip.appendChild(pill);
+    }
+    const selPill = strip.querySelector('.day-pill.selected');
+    if(selPill) selPill.scrollIntoView({inline:'center', block:'nearest'});
+
+    $('#todayJumpBtn').style.display = (ovSelectedDate===todayStr) ? 'none' : 'block';
+    $('#todayJumpBtn').onclick = ()=>{ ovSelectedDate = todayStr; renderOverview(); };
+
+    const wd = weekdayOf(ovSelectedDate);
+    const sessions = state.sessions.filter(s=>s.day_of_week===wd).sort((a,b)=>timeMin(a.start_time)-timeMin(b.start_time));
+    const tasks = dayTasks(ovSelectedDate);
+    const doneCount = tasks.filter(t=>isTaskDone(t.task_id, ovSelectedDate)).length;
+    $('#ovStat').innerHTML = `${wd} · <b>${sessions.length}</b> 节课 · 任务 <b>${doneCount}/${tasks.length}</b> 完成`;
+
+    const cWrap = $('#ovCourses');
+    if(sessions.length===0){
+      cWrap.innerHTML = `<div class="empty-block">这天没有课</div>`;
+    }else{
+      cWrap.innerHTML = `<div class="timeline">` + sessions.map(s=>{
+        const course = state.courses.find(c=>c.course_id===s.course_id);
+        if(!course) return '';
+        return `<div class="tl-item">
+          <div class="tl-time mono">${s.start_time}<br>${s.end_time}</div>
+          <div class="tl-card" style="border-left-color:${course.color_tag};">
+            <div class="c-name">${esc(course.course_name)}</div>
+            <div class="c-meta">${esc(s.location||course.default_location||'未填地点')}</div>
+          </div>
+        </div>`;
+      }).join('') + `</div>`;
+    }
+
+    const tWrap = $('#ovTasks');
+    if(tasks.length===0){
+      tWrap.innerHTML = `<div class="empty-block">这天没有任务</div>`;
+    }else{
+      tWrap.innerHTML = `<div class="task-list">` + tasks.map(t=>{
+        const done = isTaskDone(t.task_id, ovSelectedDate);
+        const course = state.courses.find(c=>c.course_id===t.related_course_id);
+        let chips = '';
+        if(course) chips += `<span class="chip course">${esc(course.course_name)}</span>`;
+        if(t.category) chips += `<span class="chip">${esc(t.category)}</span>`;
+        if(t.priority && t.priority!=='无') chips += `<span class="chip priority-${t.priority}">${t.priority}优先级</span>`;
+        if(t.is_recurring) chips += `<span class="chip">每周重复</span>`;
+        return `<div class="task-row">
+          <div class="t-check${done?' done':''}" data-task="${t.task_id}"></div>
+          <div class="t-body">
+            <div class="t-title${done?' done':''}">${esc(t.title)}</div>
+            <div class="t-meta">${chips}</div>
+          </div>
+        </div>`;
+      }).join('') + `</div>`;
+      tWrap.querySelectorAll('.t-check').forEach(el=>{
+        el.onclick = async ()=>{
+          const tid = el.dataset.task;
+          await toggleCompletion(tid, ovSelectedDate);
+          renderOverview();
+        };
+      });
+    }
+    renderHealthBlock();
+  }
+
+  function isFitnessDay(dateStr){ return state.fitness_days.includes(dateStr); }
+  async function toggleFitnessDay(dateStr){
+    if(state.fitness_days.includes(dateStr)) state.fitness_days = state.fitness_days.filter(d=>d!==dateStr);
+    else state.fitness_days.push(dateStr);
+    await saveState();
+  }
+  function isSuppTaken(suppId, dateStr){ return state.supplement_logs.some(l=>l.supplement_id===suppId && l.date===dateStr); }
+  async function toggleSuppLog(suppId, dateStr){
+    const idx = state.supplement_logs.findIndex(l=>l.supplement_id===suppId && l.date===dateStr);
+    if(idx>=0) state.supplement_logs.splice(idx,1);
+    else state.supplement_logs.push({log_id:uid('slog'), supplement_id:suppId, date:dateStr});
+    await saveState();
+  }
+  function getMeal(dateStr, slot){ const m = state.meals.find(x=>x.date===dateStr && x.slot===slot); return m ? m.content : ''; }
+  async function setMeal(dateStr, slot, content){
+    let m = state.meals.find(x=>x.date===dateStr && x.slot===slot);
+    if(m) m.content = content;
+    else state.meals.push({meal_id:uid('meal'), date:dateStr, slot, content});
+    await saveState();
+  }
+
+  function renderHealthBlock(){
+    const gymDay = isFitnessDay(ovSelectedDate);
+    let html = `<div class="fitness-toggle-row">
+      <button class="fitness-btn${gymDay?' on':''}" id="fitnessOnBtn">健身</button>
+      <button class="fitness-btn${!gymDay?' on':''}" id="fitnessOffBtn">不健身</button>
+    </div>`;
+
+    html += `<div class="task-list" style="margin:0 20px 14px;">`;
+    const applicable = state.supplements.filter(s=> s.schedule_type==='daily' || (s.schedule_type==='workout_day' && gymDay));
+    if(applicable.length===0){
+      html += `<div style="padding:16px 14px; color:var(--ink-2); font-size:13px;">还没有补充剂，去"健康"页新建</div>`;
+    }else{
+      applicable.forEach(s=>{
+        const taken = isSuppTaken(s.supplement_id, ovSelectedDate);
+        html += `<div class="supp-check-row">
+          <div class="t-check${taken?' done':''}" data-supp="${s.supplement_id}"></div>
+          <div class="supp-name${taken?' done':''}">${esc(s.name)}</div>
+          <span class="supp-tag">${s.schedule_type==='daily'?'每天':'健身日'}</span>
+        </div>`;
+      });
+    }
+    html += `</div>`;
+
+    html += `<div class="task-list" style="margin:0 20px;">`;
+    ['早餐','午餐','晚餐'].forEach(slot=>{
+      html += `<div class="meal-row">
+        <div class="meal-label">${slot}</div>
+        <input class="meal-input" data-slot="${slot}" placeholder="吃了什么 / 打算吃什么" value="${esc(getMeal(ovSelectedDate, slot))}">
+      </div>`;
+    });
+    html += `</div>`;
+
+    $('#ovHealth').innerHTML = html;
+    $('#fitnessOnBtn').onclick = async ()=>{ if(!isFitnessDay(ovSelectedDate)){ await toggleFitnessDay(ovSelectedDate); renderOverview(); } };
+    $('#fitnessOffBtn').onclick = async ()=>{ if(isFitnessDay(ovSelectedDate)){ await toggleFitnessDay(ovSelectedDate); renderOverview(); } };
+    document.querySelectorAll('#ovHealth .supp-check-row .t-check').forEach(el=>{
+      el.onclick = async ()=>{ await toggleSuppLog(el.dataset.supp, ovSelectedDate); renderOverview(); };
+    });
+    document.querySelectorAll('#ovHealth .meal-input').forEach(inp=>{
+      inp.onchange = async ()=>{ await setMeal(ovSelectedDate, inp.dataset.slot, inp.value); };
+    });
+  }
+
+  // ================= MONTH VIEW =================
+  function coursesOnDate(dateStr, wd){
+    const ids = new Set();
+    state.sessions.forEach(s=>{
+      if(s.day_of_week !== wd) return;
+      const course = state.courses.find(c=>c.course_id===s.course_id);
+      if(!course) return;
+      if(course.semester_start_date && dateStr < course.semester_start_date) return;
+      if(course.semester_end_date && dateStr > course.semester_end_date) return;
+      ids.add(course.course_id);
+    });
+    return [...ids].map(id=>state.courses.find(c=>c.course_id===id));
+  }
+
+  function toggleMonthView(open){
+    monthViewOpen = open;
+    $('#ovDayMode').style.display = open ? 'none' : 'block';
+    $('#ovMonthMode').style.display = open ? 'block' : 'none';
+    $('#monthToggleBtn').textContent = open ? '✕' : '📅';
+    $('#ovTitle').textContent = open ? '月历' : '今日安排';
+    if(open){ currentMonthCursor = new Date(ovSelectedDate+'T00:00:00'); renderMonthView(); }
+  }
+  $('#monthToggleBtn').onclick = ()=> toggleMonthView(!monthViewOpen);
+  $('#monthPrevBtn').onclick = ()=>{ currentMonthCursor.setMonth(currentMonthCursor.getMonth()-1); renderMonthView(); };
+  $('#monthNextBtn').onclick = ()=>{ currentMonthCursor.setMonth(currentMonthCursor.getMonth()+1); renderMonthView(); };
+
+  function renderMonthView(){
+    const y = currentMonthCursor.getFullYear(), m = currentMonthCursor.getMonth();
+    $('#monthTitle').textContent = `${y}年${m+1}月`;
+    const todayStr = fmtDate(new Date());
+
+    const firstOfMonth = new Date(y, m, 1);
+    const startOffset = (firstOfMonth.getDay()+6)%7; // Mon=0
+    const gridStart = new Date(y, m, 1 - startOffset);
+
+    let html = ['周一','周二','周三','周四','周五','周六','周日'].map(d=>`<div class="month-weekday-label">${d.replace('周','')}</div>`).join('');
+
+    for(let i=0; i<42; i++){
+      const d = new Date(gridStart); d.setDate(gridStart.getDate()+i);
+      const dateStr = fmtDate(d);
+      const wd = DAYS[(d.getDay()+6)%7];
+      const inMonth = d.getMonth()===m;
+      const courses = coursesOnDate(dateStr, wd);
+      const taskCount = dayTasks(dateStr).length;
+      const hasFitness = isFitnessDay(dateStr);
+      const primary = courses[0];
+      const numStyle = primary ? `background:${primary.color_tag}; color:#fff;` : '';
+      const extraDots = courses.slice(1,4).map(c=>`<span class="month-dot" style="background:${c.color_tag};"></span>`).join('');
+      html += `<div class="month-cell${inMonth?'':' other-month'}${dateStr===todayStr?' is-today':''}${dateStr===ovSelectedDate?' is-selected':''}${hasFitness?' fit-marked':''}" data-date="${dateStr}">
+        <div class="month-daynum" style="${numStyle}">${d.getDate()}</div>
+        <div class="month-dots">${extraDots}${taskCount>0?`<span class="month-tasknum">${taskCount}</span>`:''}</div>
+      </div>`;
+      if(i===41) break;
+    }
+    $('#monthGrid').innerHTML = html;
+    document.querySelectorAll('.month-cell').forEach(cell=>{
+      cell.onclick = ()=>{
+        ovSelectedDate = cell.dataset.date;
+        toggleMonthView(false);
+        renderOverview();
+      };
+    });
+  }
+
+  function dayTasks(dateStr){
+    const wd = weekdayOf(dateStr);
+    return state.tasks.filter(t=>{
+      if(t.is_recurring){
+        if(!t.repeat_days || !t.repeat_days.includes(wd)) return false;
+        if(t.repeat_until && dateStr > t.repeat_until) return false;
+        return true;
+      }else{
+        return t.due_date === dateStr;
+      }
+    });
+  }
+  function isTaskDone(taskId, dateStr){
+    return state.completions.some(c=>c.task_id===taskId && c.date===dateStr);
+  }
+  async function toggleCompletion(taskId, dateStr){
+    const idx = state.completions.findIndex(c=>c.task_id===taskId && c.date===dateStr);
+    if(idx>=0) state.completions.splice(idx,1);
+    else state.completions.push({completion_id:uid('comp'), task_id:taskId, date:dateStr});
+    await saveState();
+  }
+
+  // ================= COURSE MANAGEMENT =================
+  function renderCourseMgmt(){
+    $('#courseStat').textContent = `共 ${state.courses.length} 门课 · ${state.sessions.length} 个时段`;
+    const list = $('#courseList');
+    if(state.courses.length===0){
+      list.innerHTML = `<div style="padding:24px 14px; text-align:center; color:var(--ink-2); font-size:13.5px;">还没有课程，点右下角「+」新建一门</div>`;
+      return;
+    }
+    list.innerHTML = '';
+    state.courses.forEach(course=>{
+      const sessions = state.sessions.filter(s=>s.course_id===course.course_id);
+      const row = document.createElement('div');
+      row.className = 'mgmt-row' + (expandedCourseId===course.course_id?' expanded':'');
+      row.innerHTML = `
+        <div class="c-dot" style="background:${course.color_tag};"></div>
+        <div class="c-body">
+          <div class="c-title">${esc(course.course_name)}</div>
+          <div class="c-sub">${esc(course.instructor||'')}${course.instructor&&course.default_location?' · ':''}${esc(course.default_location||'')}</div>
+        </div>
+        <div class="chev">›</div>`;
+      row.onclick = ()=>{ expandedCourseId = expandedCourseId===course.course_id?null:course.course_id; renderCourseMgmt(); };
+      list.appendChild(row);
+
+      const detail = document.createElement('div');
+      detail.className = 'mgmt-detail' + (expandedCourseId===course.course_id?' open':'');
+      if(expandedCourseId===course.course_id){
+        detail.innerHTML = courseDetailHtml(course, sessions);
+        list.appendChild(detail);
+        wireCourseDetail(detail, course);
+      }else{
+        list.appendChild(detail);
+      }
+    });
+  }
+  let editingSessionsCourseId = null;
+  function courseDetailHtml(course, sessions){
+    const isEditing = editingSessionsCourseId === course.course_id;
+    let html = '';
+    if(course.subtitle_folder_path) html += `<div class="cd-note">字幕文件夹：${esc(course.subtitle_folder_path)}</div>`;
+
+    html += `<div class="cd-section-head"><span>上课时段</span><button class="link-btn" data-toggle-edit="${course.course_id}">${isEditing?'完成':'修改'}</button></div>`;
+
+    if(!isEditing){
+      if(sessions.length===0){
+        html += `<div class="session-view-row" style="color:var(--ink-2);">还没有时段</div>`;
+      }else{
+        sessions.forEach(s=>{
+          html += `<div class="session-view-row">
+            <span class="mono">${esc(s.day_of_week)} ${s.start_time}–${s.end_time}</span>
+            <span class="sv-loc">${esc(s.location||course.default_location||'')}</span>
+          </div>`;
+        });
+      }
+    }else{
+      sessions.forEach(s=>{
+        html += `<div class="session-chip" data-sid="${s.session_id}">
+          <select class="s-day">${DAYS.map(d=>`<option ${d===s.day_of_week?'selected':''}>${d}</option>`).join('')}</select>
+          <input type="time" class="s-start" value="${s.start_time}">
+          <input type="time" class="s-end" value="${s.end_time}">
+          <input type="text" class="s-loc" placeholder="地点覆盖" value="${esc(s.location||'')}">
+          <button class="s-del">×</button>
+        </div>`;
+      });
+      html += `<button class="link-btn" data-add-session="${course.course_id}">+ 添加时段</button>`;
+    }
+
+    const assignments = state.assignments.filter(a=>a.course_id===course.course_id);
+    html += `<div class="cd-section-head" style="margin-top:16px;"><span>作业</span><button class="link-btn" data-add-assignment="${course.course_id}">+ 添加作业</button></div>`;
+    if(assignments.length===0){
+      html += `<div class="session-view-row" style="color:var(--ink-2);">暂无作业 · Canvas接入后可自动同步</div>`;
+    }else{
+      assignments.forEach(a=>{
+        html += `<div class="assignment-row" data-aid="${a.assignment_id}">
+          <div class="t-check${a.done?' done':''}" data-toggle-assignment="${a.assignment_id}"></div>
+          <input type="text" class="a-title-input" data-aid-title="${a.assignment_id}" placeholder="作业标题" value="${esc(a.title||'')}">
+          <input type="date" class="a-due-input mono" data-aid-due="${a.assignment_id}" value="${a.due_date||''}">
+          <button class="s-del" data-del-assignment="${a.assignment_id}">×</button>
+        </div>`;
+      });
+    }
+
+    html += `<div style="display:flex; justify-content:flex-end; margin-top:14px;"><button class="s-del" data-del-course="${course.course_id}" style="font-size:20px;">×</button></div>`;
+    return html;
+  }
+  function wireCourseDetail(detail, course){
+    const toggleBtn = detail.querySelector('[data-toggle-edit]');
+    if(toggleBtn) toggleBtn.onclick = (e)=>{ e.stopPropagation();
+      editingSessionsCourseId = editingSessionsCourseId===course.course_id ? null : course.course_id;
+      renderCourseMgmt();
+    };
+    detail.querySelectorAll('.session-chip').forEach(chip=>{
+      const sid = chip.dataset.sid;
+      const upd = async ()=>{
+        const s = state.sessions.find(x=>x.session_id===sid); if(!s) return;
+        s.day_of_week = chip.querySelector('.s-day').value;
+        s.start_time = chip.querySelector('.s-start').value;
+        s.end_time = chip.querySelector('.s-end').value;
+        s.location = chip.querySelector('.s-loc').value;
+        await saveState(); renderAll();
+      };
+      chip.querySelector('.s-day').onchange = upd;
+      chip.querySelector('.s-start').onchange = upd;
+      chip.querySelector('.s-end').onchange = upd;
+      chip.querySelector('.s-loc').onchange = upd;
+      chip.querySelector('.s-del').onclick = async (e)=>{ e.stopPropagation();
+        state.sessions = state.sessions.filter(x=>x.session_id!==sid);
+        await saveState(); renderAll(); toast('时段已删除');
+      };
+    });
+    const addBtn = detail.querySelector('[data-add-session]');
+    if(addBtn) addBtn.onclick = async (e)=>{ e.stopPropagation();
+      state.sessions.push({session_id:uid('sess'), course_id:course.course_id, day_of_week:DAYS[todayIndex()], start_time:'09:00', end_time:'10:30', location:''});
+      await saveState(); renderAll();
+    };
+    const addAssignBtn = detail.querySelector('[data-add-assignment]');
+    if(addAssignBtn) addAssignBtn.onclick = async (e)=>{ e.stopPropagation();
+      state.assignments.push({assignment_id:uid('assign'), course_id:course.course_id, title:'', due_date:'', done:false, source:'manual'});
+      await saveState(); renderAll();
+    };
+    detail.querySelectorAll('[data-toggle-assignment]').forEach(el=>{
+      el.onclick = async (e)=>{ e.stopPropagation();
+        const a = state.assignments.find(x=>x.assignment_id===el.dataset.toggleAssignment); if(!a) return;
+        a.done = !a.done; await saveState(); renderAll();
+      };
+    });
+    detail.querySelectorAll('[data-del-assignment]').forEach(btn=>{
+      btn.onclick = async (e)=>{ e.stopPropagation();
+        state.assignments = state.assignments.filter(x=>x.assignment_id!==btn.dataset.delAssignment);
+        await saveState(); renderAll();
+      };
+    });
+    detail.querySelectorAll('[data-aid-title]').forEach(inp=>{
+      inp.onchange = async ()=>{
+        const a = state.assignments.find(x=>x.assignment_id===inp.dataset.aidTitle); if(!a) return;
+        a.title = inp.value; await saveState();
+      };
+    });
+    detail.querySelectorAll('[data-aid-due]').forEach(inp=>{
+      inp.onchange = async ()=>{
+        const a = state.assignments.find(x=>x.assignment_id===inp.dataset.aidDue); if(!a) return;
+        a.due_date = inp.value; await saveState(); renderAll();
+      };
+    });
+    const delBtn = detail.querySelector('[data-del-course]');
+    if(delBtn) delBtn.onclick = async (e)=>{ e.stopPropagation();
+      if(!confirm(`确定删除「${course.course_name}」吗？它的所有时段也会被删除。`)) return;
+      state.courses = state.courses.filter(c=>c.course_id!==course.course_id);
+      state.sessions = state.sessions.filter(s=>s.course_id!==course.course_id);
+      state.assignments = state.assignments.filter(a=>a.course_id!==course.course_id);
+      expandedCourseId = null;
+      await saveState(); renderAll(); toast('课程已删除');
+    };
+  }
+
+  // ================= TASK MANAGEMENT =================
+  function taskKindOf(t){
+    if(t.task_kind) return t.task_kind;
+    return t.is_recurring ? 'daily' : 'once'; // 兼容旧数据没有task_kind字段的情况
+  }
+  function renderTaskMgmt(){
+    $('#taskStat').textContent = `共 ${state.tasks.length} 个任务`;
+    const longterm = state.tasks.filter(t=>taskKindOf(t)==='longterm');
+    const daily = state.tasks.filter(t=>taskKindOf(t)==='daily');
+    const once = state.tasks.filter(t=>taskKindOf(t)==='once');
+    renderTaskGroup($('#taskListLongterm'), longterm, '还没有长期任务，点右下角「+」新建一个');
+    renderTaskGroup($('#taskListDaily'), daily, '还没有日常任务，点右下角「+」新建一个');
+    renderTaskGroup($('#taskListOnce'), once, '还没有一次性任务，点右下角「+」新建一个');
+  }
+
+  function renderTaskGroup(list, tasks, emptyMsg){
+    if(tasks.length===0){
+      list.innerHTML = `<div style="padding:24px 14px; text-align:center; color:var(--ink-2); font-size:13.5px;">${emptyMsg}</div>`;
+      return;
+    }
+    list.innerHTML = '';
+    tasks.forEach(t=>{
+      const course = state.courses.find(c=>c.course_id===t.related_course_id);
+      const kind = taskKindOf(t);
+      const subtitle = kind==='daily'
+        ? `每周${(t.repeat_days||[]).map(d=>d.replace('周','')).join('/')}` + (t.repeat_until?` · 至${t.repeat_until}`:'')
+        : kind==='once'
+          ? (t.due_date ? `截止 ${t.due_date}` : '未设日期')
+          : '长期目标';
+      const row = document.createElement('div');
+      row.className = 'mgmt-row' + (expandedTaskId===t.task_id?' expanded':'');
+      row.innerHTML = `
+        <div class="c-dot" style="background:${t.priority==='高'?'var(--danger)':'var(--ink-3)'};"></div>
+        <div class="c-body">
+          <div class="c-title">${esc(t.title)}</div>
+          <div class="c-sub">${esc(subtitle)}${course?' · '+esc(course.course_name):''}</div>
+        </div>
+        <div class="chev">›</div>`;
+      row.onclick = ()=>{ expandedTaskId = expandedTaskId===t.task_id?null:t.task_id; renderTaskMgmt(); };
+      list.appendChild(row);
+
+      const detail = document.createElement('div');
+      detail.className = 'mgmt-detail' + (expandedTaskId===t.task_id?' open':'');
+      if(expandedTaskId===t.task_id){
+        detail.innerHTML = `
+          ${t.category?`<div class="detail-line">分类：<b>${esc(t.category)}</b></div>`:''}
+          ${t.notes?`<div class="detail-line">备注：${esc(t.notes)}</div>`:''}
+          <div style="display:flex; justify-content:flex-end; margin-top:12px;"><button class="s-del" data-del-task="${t.task_id}" style="font-size:20px;">×</button></div>
+        `;
+        list.appendChild(detail);
+        detail.querySelector('[data-del-task]').onclick = async (e)=>{ e.stopPropagation();
+          if(!confirm(`确定删除任务「${t.title}」吗？`)) return;
+          state.tasks = state.tasks.filter(x=>x.task_id!==t.task_id);
+          state.completions = state.completions.filter(c=>c.task_id!==t.task_id);
+          expandedTaskId = null;
+          await saveState(); renderAll(); toast('任务已删除');
+        };
+      }else{
+        list.appendChild(detail);
+      }
+    });
+  }
+
+  function renderAll(){ renderOverview(); renderCourseMgmt(); renderTaskMgmt(); renderHealthMgmt(); }
+
+  // ================= HEALTH MANAGEMENT =================
+  let expandedSuppId = null;
+  function renderHealthMgmt(){
+    $('#healthStat').textContent = `共 ${state.supplements.length} 种补充剂`;
+    const list = $('#supplementList');
+    if(state.supplements.length===0){
+      list.innerHTML = `<div style="padding:24px 14px; text-align:center; color:var(--ink-2); font-size:13.5px;">还没有补充剂，点右下角「+」新建一个</div>`;
+    }else{
+    list.innerHTML = '';
+    state.supplements.forEach(s=>{
+      const row = document.createElement('div');
+      row.className = 'mgmt-row' + (expandedSuppId===s.supplement_id?' expanded':'');
+      row.innerHTML = `
+        <div class="c-dot" style="background:var(--accent);"></div>
+        <div class="c-body">
+          <div class="c-title">${esc(s.name)}</div>
+          <div class="c-sub">${s.schedule_type==='daily'?'每天':'只在健身日'}</div>
+        </div>
+        <div class="chev">›</div>`;
+      row.onclick = ()=>{ expandedSuppId = expandedSuppId===s.supplement_id?null:s.supplement_id; renderHealthMgmt(); };
+      list.appendChild(row);
+
+      const detail = document.createElement('div');
+      detail.className = 'mgmt-detail' + (expandedSuppId===s.supplement_id?' open':'');
+      if(expandedSuppId===s.supplement_id){
+        detail.innerHTML = `
+          ${s.notes?`<div class="detail-line">备注：${esc(s.notes)}</div>`:''}
+          <div style="display:flex; justify-content:flex-end; margin-top:12px;"><button class="s-del" data-del-supp="${s.supplement_id}" style="font-size:20px;">×</button></div>
+        `;
+        list.appendChild(detail);
+        detail.querySelector('[data-del-supp]').onclick = async (e)=>{ e.stopPropagation();
+          if(!confirm(`确定删除「${s.name}」吗？`)) return;
+          state.supplements = state.supplements.filter(x=>x.supplement_id!==s.supplement_id);
+          state.supplement_logs = state.supplement_logs.filter(l=>l.supplement_id!==s.supplement_id);
+          expandedSuppId = null;
+          await saveState(); renderAll(); toast('补充剂已删除');
+        };
+      }else{
+        list.appendChild(detail);
+      }
+    });
+    }
+    renderFitnessChart();
+  }
+
+  function renderFitnessChart(){
+    const now = new Date();
+    const y = now.getFullYear(), m = now.getMonth();
+    const todayStr = fmtDate(now);
+    const monthPrefix = `${y}-${String(m+1).padStart(2,'0')}`;
+    const markedThisMonth = state.fitness_days.filter(d=>d.startsWith(monthPrefix)).length;
+
+    let streak = 0;
+    let cursor = new Date(now);
+    while(true){
+      const ds = fmtDate(cursor);
+      if(state.fitness_days.includes(ds)){ streak++; cursor.setDate(cursor.getDate()-1); }
+      else break;
+    }
+
+    const firstOfMonth = new Date(y, m, 1);
+    const startOffset = (firstOfMonth.getDay()+6)%7;
+    const gridStart = new Date(y, m, 1 - startOffset);
+    let cells = ['一','二','三','四','五','六','日'].map(d=>`<div class="fc-weekday">${d}</div>`).join('');
+    for(let i=0;i<42;i++){
+      const d = new Date(gridStart); d.setDate(gridStart.getDate()+i);
+      const ds = fmtDate(d);
+      const inMonth = d.getMonth()===m;
+      const marked = state.fitness_days.includes(ds);
+      cells += `<div class="fc-cell${marked?' marked':''}${ds===todayStr?' is-today':''}${inMonth?'':' other-month'}">${d.getDate()}</div>`;
+    }
+
+    $('#fitnessChartCard').innerHTML = `
+      <div class="fc-stat-row">
+        <div><div class="fc-num">${markedThisMonth}</div><div class="fc-label">本月健身天数</div></div>
+        <div><div class="fc-num">${streak}</div><div class="fc-label">连续健身天数</div></div>
+      </div>
+      <div class="fc-grid">${cells}</div>
+    `;
+  }
+
+  const suppSheet = $('#suppSheet');
+  let suppType = 'daily';
+  function openSuppSheet(){
+    suppType = 'daily';
+    document.querySelectorAll('#suppTypeSegment button').forEach(b=>b.classList.toggle('sel', b.dataset.type==='daily'));
+    suppSheet.classList.add('open'); backdrop.classList.add('open');
+  }
+  function closeSuppSheet(){
+    suppSheet.classList.remove('open'); backdrop.classList.remove('open');
+    $('#f_s_name').value=''; $('#f_s_notes').value=''; suppType='daily';
+  }
+  $('#suppSheetCancel').onclick = closeSuppSheet;
+  document.querySelectorAll('#suppTypeSegment button').forEach(b=> b.onclick = ()=>{
+    suppType = b.dataset.type;
+    document.querySelectorAll('#suppTypeSegment button').forEach(x=>x.classList.toggle('sel', x===b));
+  });
+  $('#suppSheetSave').onclick = async ()=>{
+    const name = $('#f_s_name').value.trim();
+    if(!name){ toast('请填写名称'); return; }
+    state.supplements.push({ supplement_id:uid('supp'), name, schedule_type:suppType, notes:$('#f_s_notes').value.trim() });
+    await saveState(); closeSuppSheet(); renderAll(); toast('补充剂已保存');
+  };
+
+  // ================= COURSE SHEET =================
+  const courseSheet = $('#courseSheet'), backdrop = $('#sheetBackdrop');
+  function openCourseSheet(){ renderColorRow(); courseSheet.classList.add('open'); backdrop.classList.add('open'); }
+  function closeCourseSheet(){
+    courseSheet.classList.remove('open'); backdrop.classList.remove('open');
+    ['f_c_name','f_c_instructor','f_c_location','f_c_start','f_c_end','f_c_notes'].forEach(id=>$('#'+id).value='');
+    selectedColor = COLORS[0];
+  }
+  $('#courseSheetCancel').onclick = closeCourseSheet;
+  function renderColorRow(){
+    const row = $('#colorRow'); row.innerHTML = '';
+    COLORS.forEach(c=>{
+      const d = document.createElement('div');
+      d.className = 'color-dot' + (c===selectedColor?' sel':'');
+      d.style.background = c;
+      d.onclick = ()=>{ selectedColor = c; renderColorRow(); };
+      row.appendChild(d);
+    });
+  }
+  $('#courseSheetSave').onclick = async ()=>{
+    const name = $('#f_c_name').value.trim();
+    if(!name){ toast('请填写课程名称'); return; }
+    state.courses.push({
+      course_id: uid('course'), course_name: name,
+      instructor: $('#f_c_instructor').value.trim(),
+      default_location: $('#f_c_location').value.trim(),
+      semester_start_date: $('#f_c_start').value,
+      semester_end_date: $('#f_c_end').value,
+      subtitle_folder_path: '',
+      color_tag: selectedColor,
+      notes: $('#f_c_notes').value.trim(),
+    });
+    await saveState(); closeCourseSheet(); renderAll(); toast('课程已保存');
+  };
+
+  // ================= TASK SHEET =================
+  const taskSheet = $('#taskSheet');
+  function openTaskSheet(){
+    renderCourseSelect(); renderPriorityRow(); renderRepeatDaysRow(); setTaskType('once');
+    taskSheet.classList.add('open'); backdrop.classList.add('open');
+  }
+  function closeTaskSheet(){
+    taskSheet.classList.remove('open'); backdrop.classList.remove('open');
+    ['f_t_title','f_t_category','f_t_due','f_t_until','f_t_notes'].forEach(id=>$('#'+id).value='');
+    $('#f_t_course').value = '';
+    selectedPriority = '无'; selectedRepeatDays = []; taskType = 'once';
+  }
+  $('#taskSheetCancel').onclick = closeTaskSheet;
+  backdrop.onclick = ()=>{ closeCourseSheet(); closeTaskSheet(); closeSuppSheet(); };
+
+  function renderCourseSelect(){
+    const sel = $('#f_t_course');
+    sel.innerHTML = '<option value="">不关联</option>' + state.courses.map(c=>`<option value="${c.course_id}">${esc(c.course_name)}</option>`).join('');
+  }
+  function renderPriorityRow(){
+    const row = $('#priorityRow'); row.innerHTML='';
+    PRIORITIES.forEach(p=>{
+      const chip = document.createElement('div');
+      chip.className = 'chip-toggle' + (p===selectedPriority?' sel':'');
+      chip.textContent = p;
+      chip.onclick = ()=>{ selectedPriority = p; renderPriorityRow(); };
+      row.appendChild(chip);
+    });
+  }
+  function renderRepeatDaysRow(){
+    const row = $('#repeatDaysRow'); row.innerHTML='';
+    DAYS.forEach(d=>{
+      const chip = document.createElement('div');
+      chip.className = 'chip-toggle' + (selectedRepeatDays.includes(d)?' sel':'');
+      chip.textContent = d.replace('周','');
+      chip.onclick = ()=>{
+        if(selectedRepeatDays.includes(d)) selectedRepeatDays = selectedRepeatDays.filter(x=>x!==d);
+        else selectedRepeatDays.push(d);
+        renderRepeatDaysRow();
+      };
+      row.appendChild(chip);
+    });
+  }
+  function setTaskType(type){
+    taskType = type;
+    document.querySelectorAll('#typeSegment button').forEach(b=>b.classList.toggle('sel', b.dataset.type===type));
+    $('#onceRow').style.display = type==='once' ? 'block':'none';
+    $('#repeatRow').style.display = type==='daily' ? 'block':'none';
+    $('#untilRow').style.display = type==='daily' ? 'block':'none';
+  }
+  document.querySelectorAll('#typeSegment button').forEach(b=> b.onclick = ()=> setTaskType(b.dataset.type));
+
+  $('#taskSheetSave').onclick = async ()=>{
+    const title = $('#f_t_title').value.trim();
+    if(!title){ toast('请填写任务标题'); return; }
+    if(taskType==='daily' && selectedRepeatDays.length===0){ toast('请至少选择一个重复星期'); return; }
+    state.tasks.push({
+      task_id: uid('task'), title,
+      category: $('#f_t_category').value.trim(),
+      priority: selectedPriority,
+      related_course_id: $('#f_t_course').value,
+      task_kind: taskType,
+      is_recurring: taskType==='daily',
+      due_date: taskType==='once' ? $('#f_t_due').value : '',
+      repeat_days: taskType==='daily' ? [...selectedRepeatDays] : [],
+      repeat_until: taskType==='daily' ? $('#f_t_until').value : '',
+      done: false,
+      notes: $('#f_t_notes').value.trim(),
+    });
+    await saveState(); closeTaskSheet(); renderAll(); toast('任务已保存');
+  };
+
+  // ================= FAB =================
+  $('#fabAdd').onclick = ()=>{
+    if(activeTab==='courses') openCourseSheet();
+    else if(activeTab==='tasks') openTaskSheet();
+    else if(activeTab==='health') openSuppSheet();
+  };
+
+  // ================= EXPORT =================
+  function download(filename, content, type){
+    const blob = new Blob([content], {type});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+  function toCsv(rows, headers){
+    const e = v => `"${String(v??'').replace(/"/g,'""')}"`;
+    return [headers.join(','), ...rows.map(r=>headers.map(h=>e(Array.isArray(r[h])?r[h].join('|'):r[h])).join(','))].join('\n');
+  }
+  $('#exportJsonRow').onclick = ()=> download('self-ops-data.json', JSON.stringify(state,null,2), 'application/json');
+  $('#exportCoursesRow').onclick = ()=> download('courses.csv', toCsv(state.courses, ['course_id','course_name','instructor','default_location','semester_start_date','semester_end_date','subtitle_folder_path','color_tag','notes']), 'text/csv');
+  $('#exportSessionsRow').onclick = ()=> download('course_sessions.csv', toCsv(state.sessions, ['session_id','course_id','day_of_week','start_time','end_time','location']), 'text/csv');
+  $('#exportTasksRow').onclick = ()=> download('tasks.csv', toCsv(state.tasks, ['task_id','title','category','priority','related_course_id','is_recurring','due_date','repeat_days','repeat_until','notes']), 'text/csv');
+  $('#exportCompletionsRow').onclick = ()=> download('task_completions.csv', toCsv(state.completions, ['completion_id','task_id','date']), 'text/csv');
+  $('#exportSuppRow').onclick = ()=> download('supplements.csv', toCsv(state.supplements, ['supplement_id','name','schedule_type','notes']), 'text/csv');
+  $('#exportSuppLogRow').onclick = ()=> download('supplement_logs.csv', toCsv(state.supplement_logs, ['log_id','supplement_id','date']), 'text/csv');
+  $('#exportFitnessRow').onclick = ()=> download('fitness_days.csv', toCsv(state.fitness_days.map(d=>({date:d})), ['date']), 'text/csv');
+  $('#exportMealsRow').onclick = ()=> download('meals.csv', toCsv(state.meals, ['meal_id','date','slot','content']), 'text/csv');
+
+  function seedRealCourses(){
+    const c1 = 'course_compsys726', c2 = 'course_compsys730', c3 = 'course_electeng704';
+    state.courses = [
+      { course_id:c1, course_name:'COMPSYS 726 Robotics & Intelligent Systems', instructor:'', default_location:'', semester_start_date:'2026-07-20', semester_end_date:'2026-11-16', subtitle_folder_path:'', color_tag:COLORS[0], notes:'' },
+      { course_id:c2, course_name:'COMPSYS 730 Robotics and Society', instructor:'', default_location:'', semester_start_date:'2026-07-20', semester_end_date:'2026-11-16', subtitle_folder_path:'', color_tag:COLORS[1], notes:'' },
+      { course_id:c3, course_name:'ELECTENG 704 Advanced Control Systems', instructor:'', default_location:'', semester_start_date:'2026-07-20', semester_end_date:'2026-11-16', subtitle_folder_path:'', color_tag:COLORS[2], notes:'教室已根据2026-07-28的换教室通知邮件更新。' },
+    ];
+    state.sessions = [
+      {session_id:uid('sess'), course_id:c1, day_of_week:'周一', start_time:'11:00', end_time:'13:00', location:'405-536 (Engineering Block 5, Room 536)'},
+      {session_id:uid('sess'), course_id:c1, day_of_week:'周一', start_time:'09:00', end_time:'10:00', location:'423-342 (Conference Centre, Room 342)'},
+      {session_id:uid('sess'), course_id:c1, day_of_week:'周二', start_time:'12:00', end_time:'13:00', location:'303-102 (Sci Maths & Physics, Room 102)'},
+      {session_id:uid('sess'), course_id:c1, day_of_week:'周三', start_time:'16:00', end_time:'17:00', location:'109-B10 (General Library, Room B10)'},
+      {session_id:uid('sess'), course_id:c2, day_of_week:'周四', start_time:'10:00', end_time:'12:00', location:'421W-201 (Architecture - West, Room 201)'},
+      {session_id:uid('sess'), course_id:c2, day_of_week:'周二', start_time:'10:00', end_time:'12:00', location:'423-348 (Conference Centre, Room 348)'},
+      {session_id:uid('sess'), course_id:c2, day_of_week:'周五', start_time:'10:00', end_time:'11:00', location:'260-092 (Owen G Glenn, Room 092)'},
+      {session_id:uid('sess'), course_id:c3, day_of_week:'周一', start_time:'16:00', end_time:'17:00', location:'303-G02 (Sci Maths & Physics, Room G02)'},
+      {session_id:uid('sess'), course_id:c3, day_of_week:'周二', start_time:'16:00', end_time:'17:00', location:'105S-039 (Clock Tower - South, Room 039)'},
+      {session_id:uid('sess'), course_id:c3, day_of_week:'周五', start_time:'14:00', end_time:'15:00', location:'303-G02 (Sci Maths & Physics, Room G02)'},
+    ];
+  }
+
+  function seedHealthAndTasks(){
+    if(state.supplements.length===0){
+      state.supplements = [
+        { supplement_id:uid('supp'), name:'鱼油', schedule_type:'daily', notes:'' },
+        { supplement_id:uid('supp'), name:'葡萄糖胺软骨素', schedule_type:'daily', notes:'关节保健品' },
+        { supplement_id:uid('supp'), name:'肌酸', schedule_type:'workout_day', notes:'只在健身日吃' },
+      ];
+    }
+    if(state.tasks.length===0){
+      state.tasks.push({
+        task_id: uid('task'), title:'自学 ELECTENG 704', category:'学业', priority:'中',
+        related_course_id:'course_electeng704', is_recurring:true,
+        due_date:'', repeat_days:[...DAYS], repeat_until:'', notes:'不去上课，自己每天学'
+      });
+      state.tasks.push({
+        task_id: uid('task'), title:'英语学习', category:'学业', priority:'中',
+        related_course_id:'', is_recurring:true,
+        due_date:'', repeat_days:[...DAYS], repeat_until:'', notes:''
+      });
+    }
+  }
+
+  // ================= SWIPE TO CHANGE DAY =================
+  (function setupSwipe(){
+    const zone = $('#ovDayMode');
+    let startX = 0, startY = 0, tracking = false;
+    zone.addEventListener('touchstart', (e)=>{
+      if(monthViewOpen) return;
+      startX = e.touches[0].clientX; startY = e.touches[0].clientY; tracking = true;
+    }, {passive:true});
+    zone.addEventListener('touchend', (e)=>{
+      if(!tracking) return; tracking = false;
+      const dx = e.changedTouches[0].clientX - startX;
+      const dy = e.changedTouches[0].clientY - startY;
+      if(Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)*1.5){
+        ovSelectedDate = addDays(ovSelectedDate, dx < 0 ? 1 : -1);
+        renderOverview();
+      }
+    }, {passive:true});
+  })();
+
+  // ================= INIT =================
+  const SEED_VERSION = 'v3';
+  (async function init(){
+    renderTabbar(); renderMore();
+    await loadState();
+    let seedVer = null;
+    try{ seedVer = localStorage.getItem(LS_PREFIX+'seed_version'); }catch(e){}
+    if(state.courses.length===0 || seedVer !== SEED_VERSION){
+      seedRealCourses();
+      try{ localStorage.setItem(LS_PREFIX+'seed_version', SEED_VERSION); }catch(e){}
+    }
+    seedHealthAndTasks();
+    await saveState();
+    renderAll();
+    $('#fabAdd').style.display = 'none';
+  })();
+})();
+</script>
+</body>
+</html>
