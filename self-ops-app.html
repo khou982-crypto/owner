@@ -563,7 +563,14 @@
 
   const $ = sel => document.querySelector(sel);
   const toastEl = $('#toast');
-  function toast(msg){ toastEl.textContent = msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'), 2000); }
+  let toastTimer = null;
+  function toast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    if(toastTimer) clearTimeout(toastTimer);
+    const isError = msg.indexOf('失败') >= 0;
+    toastTimer = setTimeout(()=>toastEl.classList.remove('show'), isError ? 8000 : 2000);
+  }
 
   function fmtDate(d){ const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; }
   function weekdayOf(dateStr){ const d = new Date(dateStr+'T00:00:00'); return DAYS[(d.getDay()+6)%7]; }
@@ -1497,7 +1504,7 @@
     const name = $('#f_s_name').value.trim();
     if(!name){ toast('请填写名称'); return; }
     state.supplements.push({ supplement_id:uid('supp'), name, schedule_type:suppType, notes:$('#f_s_notes').value.trim() });
-    await saveState(); closeSuppSheet(); renderAll(); toast('补充剂已保存');
+    const ok = await saveState(); if(!ok){ state.supplements.pop(); return; } closeSuppSheet(); renderAll(); toast('补充剂已保存');
   };
 
   // ================= COURSE SHEET =================
@@ -1561,7 +1568,7 @@
     newCourseSessions.forEach(s=>{
       state.sessions.push({ session_id: uid('sess'), course_id: newCourseId, day_of_week: s.day_of_week, start_time: s.start_time, end_time: s.end_time, location: s.location });
     });
-    await saveState(); closeCourseSheet(); renderAll(); toast('课程已保存');
+    const ok = await saveState(); if(!ok){ state.courses.pop(); return; } closeCourseSheet(); renderAll(); toast('课程已保存');
   };
 
   // ================= TASK SHEET =================
@@ -1635,7 +1642,7 @@
       done: false,
       notes: $('#f_t_notes').value.trim(),
     });
-    await saveState(); closeTaskSheet(); renderAll(); toast('任务已保存');
+    const ok = await saveState(); if(!ok){ state.tasks.pop(); return; } closeTaskSheet(); renderAll(); toast('任务已保存');
   };
 
   // ================= FAB =================
