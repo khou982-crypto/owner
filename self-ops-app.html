@@ -263,6 +263,26 @@
   .f-row input, .f-row textarea, .f-row select{ width:100%; border:none; background:none; font-size:14.5px; color:var(--ink); padding:0; font-family:-apple-system,"SF Pro Text",sans-serif; font-weight:400; line-height:1.4; }
   .f-row input:focus, .f-row textarea:focus, .f-row select:focus{ outline:none; }
   .f-row textarea{ resize:vertical; min-height:44px; }
+  /* ---- date/time inputs: icon-only, click to pick (no yyyy/mm/dd or --:-- text) ---- */
+  .dt-field{ display:inline-flex; align-items:center; gap:7px; }
+  .dt-field input[type="date"], .dt-field input[type="time"]{
+    -webkit-appearance:none; appearance:none;
+    width:30px; height:30px; padding:0; margin:0; border:none; flex-shrink:0;
+    background:var(--bg-grouped); border-radius:9px; position:relative; cursor:pointer;
+    color:transparent;
+  }
+  .dt-field input[type="date"]::-webkit-datetime-edit,
+  .dt-field input[type="time"]::-webkit-datetime-edit{ display:none; }
+  .dt-field input[type="date"]::-webkit-inner-spin-button,
+  .dt-field input[type="time"]::-webkit-inner-spin-button{ display:none; }
+  .dt-field input[type="date"]::-webkit-calendar-picker-indicator,
+  .dt-field input[type="time"]::-webkit-calendar-picker-indicator{
+    position:absolute; inset:0; margin:0; padding:0; width:100%; height:100%; cursor:pointer;
+  }
+  .dt-field .dt-label{ font-size:12.5px; font-weight:500; color:var(--ink); white-space:nowrap; }
+  .dt-field .dt-label:empty{ display:none; }
+  .dt-field.compact input[type="date"], .dt-field.compact input[type="time"]{ width:26px; height:26px; border-radius:8px; }
+
   .color-row{ display:flex; gap:10px; padding-top:2px; }
   .color-dot{ width:26px; height:26px; border-radius:50%; border:2px solid transparent; cursor:pointer; }
   .color-dot.sel{ border-color:var(--ink); }
@@ -421,8 +441,8 @@
         <div class="f-row"><label>默认上课地点</label><input id="f_c_location" placeholder="如：理科楼 302"></div>
       </div>
       <div class="f-group">
-        <div class="f-row"><label>学期开始日期</label><input type="date" id="f_c_start"></div>
-        <div class="f-row"><label>学期结束日期</label><input type="date" id="f_c_end"></div>
+        <div class="f-row"><label>学期开始日期</label><div class="dt-field"><input type="date" id="f_c_start"><span class="dt-label mono"></span></div></div>
+        <div class="f-row"><label>学期结束日期</label><div class="dt-field"><input type="date" id="f_c_end"><span class="dt-label mono"></span></div></div>
       </div>
       <div class="f-group"><div class="f-row"><label>颜色标记</label><div class="color-row" id="colorRow"></div></div></div>
       <div class="f-group">
@@ -463,13 +483,13 @@
             <button data-type="once" class="sel">一次性任务</button>
           </div>
         </div>
-        <div class="f-row" id="onceRow"><label>截止日期</label><input type="date" id="f_t_due"></div>
-        <div class="f-row" id="onceTimeRow"><label>具体时间（可留空）</label><input type="time" id="f_t_due_time"></div>
+        <div class="f-row" id="onceRow"><label>截止日期</label><div class="dt-field"><input type="date" id="f_t_due"><span class="dt-label mono"></span></div></div>
+        <div class="f-row" id="onceTimeRow"><label>具体时间（可留空）</label><div class="dt-field"><input type="time" id="f_t_due_time"><span class="dt-label mono"></span></div></div>
         <div class="f-row" id="repeatRow" style="display:none;">
           <label>重复星期（可多选）</label>
           <div class="chip-toggle-row" id="repeatDaysRow"></div>
         </div>
-        <div class="f-row" id="untilRow" style="display:none;"><label>重复至（可留空 = 一直重复）</label><input type="date" id="f_t_until"></div>
+        <div class="f-row" id="untilRow" style="display:none;"><label>重复至（可留空 = 一直重复）</label><div class="dt-field"><input type="date" id="f_t_until"><span class="dt-label mono"></span></div></div>
       </div>
       <div class="f-group"><div class="f-row"><label>备注</label><textarea id="f_t_notes" placeholder="任何想记的额外信息"></textarea></div></div>
     </div>
@@ -572,6 +592,21 @@
     toastTimer = setTimeout(()=>toastEl.classList.remove('show'), isError ? 8000 : 2000);
   }
 
+  // ---- date/time icon-input label helpers (input shows icon only; this renders the picked value as small text next to it) ----
+  function dateLabel(v){ if(!v) return ''; const d=new Date(v+'T00:00:00'); if(isNaN(d)) return ''; return `${d.getMonth()+1}月${d.getDate()}日`; }
+  function timeLabel(v){ return v||''; }
+  function syncDt(input){
+    if(!input) return;
+    const label = input.parentElement.querySelector('.dt-label');
+    if(!label) return;
+    label.textContent = input.type==='date' ? dateLabel(input.value) : timeLabel(input.value);
+  }
+  function wireDtField(input){
+    if(!input) return;
+    syncDt(input);
+    input.addEventListener('input', ()=>syncDt(input));
+    input.addEventListener('change', ()=>syncDt(input));
+  }
   function fmtDate(d){ const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; }
   function weekdayOf(dateStr){ const d = new Date(dateStr+'T00:00:00'); return DAYS[(d.getDay()+6)%7]; }
   function addDays(dateStr, n){ const d = new Date(dateStr+'T00:00:00'); d.setDate(d.getDate()+n); return fmtDate(d); }
@@ -1166,8 +1201,8 @@
       sessions.forEach(s=>{
         html += `<div class="session-chip" data-sid="${s.session_id}">
           <select class="s-day">${DAYS.map(d=>`<option ${d===s.day_of_week?'selected':''}>${d}</option>`).join('')}</select>
-          <input type="time" class="s-start" value="${s.start_time}">
-          <input type="time" class="s-end" value="${s.end_time}">
+          <div class="dt-field compact"><input type="time" class="s-start" value="${s.start_time}"><span class="dt-label mono"></span></div>
+          <div class="dt-field compact"><input type="time" class="s-end" value="${s.end_time}"><span class="dt-label mono"></span></div>
           <input type="text" class="s-loc" placeholder="地点覆盖" value="${esc(s.location||'')}">
           <button class="s-del">×</button>
         </div>`;
@@ -1184,7 +1219,7 @@
         html += `<div class="assignment-row" data-aid="${a.assignment_id}">
           <div class="t-check${a.done?' done':''}" data-toggle-assignment="${a.assignment_id}"></div>
           <input type="text" class="a-title-input" data-aid-title="${a.assignment_id}" placeholder="作业标题" value="${esc(a.title||'')}">
-          <input type="date" class="a-due-input mono" data-aid-due="${a.assignment_id}" value="${a.due_date||''}">
+          <div class="dt-field compact"><input type="date" class="a-due-input" data-aid-due="${a.assignment_id}" value="${a.due_date||''}"><span class="dt-label mono"></span></div>
           <button class="s-del" data-del-assignment="${a.assignment_id}">×</button>
         </div>`;
       });
@@ -1209,6 +1244,8 @@
         s.location = chip.querySelector('.s-loc').value;
         await saveState(); renderAll();
       };
+      wireDtField(chip.querySelector('.s-start'));
+      wireDtField(chip.querySelector('.s-end'));
       chip.querySelector('.s-day').onchange = upd;
       chip.querySelector('.s-start').onchange = upd;
       chip.querySelector('.s-end').onchange = upd;
@@ -1250,6 +1287,7 @@
       };
     });
     detail.querySelectorAll('[data-aid-due]').forEach(inp=>{
+      wireDtField(inp);
       inp.onchange = async ()=>{
         const a = state.assignments.find(x=>x.assignment_id===inp.dataset.aidDue); if(!a) return;
         a.due_date = inp.value; await saveState(); renderAll();
@@ -1334,7 +1372,10 @@
             <select class="ted-priority">${PRIORITIES.map(p=>`<option ${p===t.priority?'selected':''}>${p}</option>`).join('')}</select>
           </div>`;
           if(kind==='once'){
-            html += `<div class="session-chip"><input type="date" class="ted-due" value="${t.due_date||''}"><input type="time" class="ted-due-time" value="${t.due_time||''}"></div>`;
+            html += `<div class="session-chip">
+              <div class="dt-field compact"><input type="date" class="ted-due" value="${t.due_date||''}"><span class="dt-label mono"></span></div>
+              <div class="dt-field compact"><input type="time" class="ted-due-time" value="${t.due_time||''}"><span class="dt-label mono"></span></div>
+            </div>`;
           }else if(kind==='daily'){
             html += `<div class="chip-toggle-row" style="padding:8px 0;">` + DAYS.map(d=>`<span class="chip-toggle ted-day${(t.repeat_days||[]).includes(d)?' sel':''}" data-day="${d}">${d.replace('周','')}</span>`).join('') + `</div>`;
           }
@@ -1357,6 +1398,8 @@
           await saveState(); renderAll(); toast('已移到"'+({longterm:'长期任务',daily:'日常任务',once:'一次性任务'}[newKind])+'"');
         };
         if(isEditing){
+          wireDtField(detail.querySelector('.ted-due'));
+          wireDtField(detail.querySelector('.ted-due-time'));
           const commit = async ()=>{
             const titleInp = detail.querySelector('.ted-title'); if(titleInp && titleInp.value.trim()) t.title = titleInp.value.trim();
             const catInp = detail.querySelector('.ted-category'); if(catInp) t.category = catInp.value.trim();
@@ -1512,10 +1555,12 @@
   // ================= COURSE SHEET =================
   const courseSheet = $('#courseSheet'), backdrop = $('#sheetBackdrop');
   let newCourseSessions = [];
+  wireDtField($('#f_c_start')); wireDtField($('#f_c_end'));
   function openCourseSheet(){ renderColorRow(); newCourseSessions=[]; renderNewCourseSessions(); courseSheet.classList.add('open'); backdrop.classList.add('open'); }
   function closeCourseSheet(){
     courseSheet.classList.remove('open'); backdrop.classList.remove('open');
     ['f_c_name','f_c_instructor','f_c_location','f_c_start','f_c_end','f_c_notes'].forEach(id=>$('#'+id).value='');
+    syncDt($('#f_c_start')); syncDt($('#f_c_end'));
     selectedColor = COLORS[0]; newCourseSessions=[]; renderNewCourseSessions();
   }
   $('#courseSheetCancel').onclick = closeCourseSheet;
@@ -1535,13 +1580,15 @@
     wrap.innerHTML = newCourseSessions.map((s,i)=>`
       <div class="session-chip" data-idx="${i}">
         <select class="ncs-day">${DAYS.map(d=>`<option ${d===s.day_of_week?'selected':''}>${d}</option>`).join('')}</select>
-        <input type="time" class="ncs-start" value="${s.start_time}">
-        <input type="time" class="ncs-end" value="${s.end_time}">
+        <div class="dt-field compact"><input type="time" class="ncs-start" value="${s.start_time}"><span class="dt-label mono"></span></div>
+        <div class="dt-field compact"><input type="time" class="ncs-end" value="${s.end_time}"><span class="dt-label mono"></span></div>
         <input type="text" class="ncs-loc" placeholder="地点覆盖" value="${esc(s.location||'')}">
         <button class="s-del ncs-del">×</button>
       </div>`).join('');
     wrap.querySelectorAll('.session-chip').forEach(chip=>{
       const i = parseInt(chip.dataset.idx);
+      wireDtField(chip.querySelector('.ncs-start'));
+      wireDtField(chip.querySelector('.ncs-end'));
       chip.querySelector('.ncs-day').onchange = e=> newCourseSessions[i].day_of_week = e.target.value;
       chip.querySelector('.ncs-start').onchange = e=> newCourseSessions[i].start_time = e.target.value;
       chip.querySelector('.ncs-end').onchange = e=> newCourseSessions[i].end_time = e.target.value;
@@ -1575,6 +1622,7 @@
 
   // ================= TASK SHEET =================
   const taskSheet = $('#taskSheet');
+  wireDtField($('#f_t_due')); wireDtField($('#f_t_due_time')); wireDtField($('#f_t_until'));
   function openTaskSheet(){
     renderCourseSelect(); renderPriorityRow(); renderRepeatDaysRow(); setTaskType('once');
     taskSheet.classList.add('open'); backdrop.classList.add('open');
@@ -1583,6 +1631,7 @@
     taskSheet.classList.remove('open'); backdrop.classList.remove('open');
     ['f_t_title','f_t_category','f_t_due','f_t_due_time','f_t_until','f_t_notes'].forEach(id=>$('#'+id).value='');
     $('#f_t_course').value = '';
+    syncDt($('#f_t_due')); syncDt($('#f_t_due_time')); syncDt($('#f_t_until'));
     selectedPriority = '无'; selectedRepeatDays = []; taskType = 'once';
   }
   $('#taskSheetCancel').onclick = closeTaskSheet;
