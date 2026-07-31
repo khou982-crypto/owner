@@ -54,6 +54,8 @@
   .login-btn:disabled{ opacity:0.5; cursor:default; }
   .login-msg{ margin-top:14px; font-size:12px; color:var(--ink-2); line-height:1.5; min-height:14px; }
   .login-msg.error{ color:var(--danger); }
+  input[type="date"].empty-dt::-webkit-datetime-edit,
+  input[type="time"].empty-dt::-webkit-datetime-edit{ color:transparent; }
 
   .phone{
     width:100%; max-width:430px; min-height:100vh; background:var(--bg);
@@ -1737,6 +1739,20 @@
       }
     }, {passive:true});
   })();
+
+  // ================= 隐藏空日期/时间输入框的占位文字，只保留图标 =================
+  function refreshEmptyDateTimeStyling(){
+    document.querySelectorAll('input[type="date"], input[type="time"]').forEach(inp=>{
+      inp.classList.toggle('empty-dt', !inp.value);
+    });
+  }
+  document.addEventListener('input', (e)=>{
+    if(e.target.matches && e.target.matches('input[type="date"], input[type="time"]')) e.target.classList.toggle('empty-dt', !e.target.value);
+  });
+  document.addEventListener('change', (e)=>{
+    if(e.target.matches && e.target.matches('input[type="date"], input[type="time"]')) e.target.classList.toggle('empty-dt', !e.target.value);
+  });
+  new MutationObserver(()=> refreshEmptyDateTimeStyling()).observe(document.body, {childList:true, subtree:true});
 
   // ================= AUTH =================
   function showApp(){
