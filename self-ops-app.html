@@ -610,6 +610,8 @@
   function cleanRows(rows){
     return rows.map(r=>{
       const out = {...r};
+      // 必须显式带上user_id：批量提交时字段会对齐，缺这个字段的新行会被填成空值，导致行级安全策略拒绝
+      out.user_id = currentUser.id;
       for(const k of Object.keys(out)){
         if(out[k] === '' && (DATE_FIELDS.includes(k) || k.endsWith('_date') || k.endsWith('_time'))) out[k] = null;
       }
