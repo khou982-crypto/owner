@@ -1607,6 +1607,17 @@
     $('#fabAdd').style.display = 'none';
   }
 
+  // 处理登录链接失效/出错的情况，给出明确提示而不是静默显示空白登录页
+  (function checkAuthError(){
+    if(window.location.hash.includes('error=')){
+      const params = new URLSearchParams(window.location.hash.slice(1));
+      const desc = params.get('error_description') || '登录链接无效或已过期';
+      const msgEl = document.getElementById('loginMsg');
+      if(msgEl){ msgEl.textContent = '链接已失效：'+decodeURIComponent(desc.replace(/\+/g,' '))+'，请重新发送登录链接。'; msgEl.className='login-msg error'; }
+      history.replaceState(null, '', window.location.pathname);
+    }
+  })();
+
   sb.auth.onAuthStateChange(async (event, session)=>{
     if(session && session.user){
       const isNewLogin = !currentUser;
