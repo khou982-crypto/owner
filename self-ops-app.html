@@ -7,6 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="自我管理台账">
 <title>自我管理台账</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap');
 
@@ -42,6 +43,17 @@
     display:flex; justify-content:center; min-height:100vh;
   }
   .mono{ font-family:'IBM Plex Mono', monospace; font-variant-numeric:tabular-nums; }
+
+  .login-screen{ width:100%; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+  .login-card{ width:100%; max-width:340px; background:var(--surface); border-radius:var(--radius-lg); padding:32px 26px; box-shadow:var(--shadow-card); text-align:center; }
+  .login-title{ font-size:20px; font-weight:600; letter-spacing:0; margin-bottom:6px; }
+  .login-sub{ font-size:12.5px; color:var(--ink-2); margin-bottom:20px; line-height:1.5; }
+  .login-input{ width:100%; padding:12px 14px; border:1px solid var(--hairline-strong); border-radius:12px; font-size:14px; margin-bottom:12px; background:var(--bg); color:var(--ink); font-family:-apple-system,"SF Pro Text",sans-serif; }
+  .login-input:focus{ outline:none; border-color:var(--accent); }
+  .login-btn{ width:100%; padding:12px 0; border-radius:12px; background:var(--ink); color:#fff; border:none; font-size:14px; font-weight:600; cursor:pointer; }
+  .login-btn:disabled{ opacity:0.5; cursor:default; }
+  .login-msg{ margin-top:14px; font-size:12px; color:var(--ink-2); line-height:1.5; min-height:14px; }
+  .login-msg.error{ color:var(--danger); }
 
   .phone{
     width:100%; max-width:430px; min-height:100vh; background:var(--bg);
@@ -253,7 +265,17 @@
 </head>
 <body>
 
-<div class="phone" id="phone">
+<div class="login-screen" id="loginScreen">
+  <div class="login-card">
+    <div class="login-title">自我管理台账</div>
+    <div class="login-sub">登录后数据会同步到你所有设备</div>
+    <input type="email" id="loginEmail" class="login-input" placeholder="你的邮箱地址" autocomplete="email">
+    <button class="login-btn" id="loginSendBtn">发送登录链接</button>
+    <div class="login-msg" id="loginMsg"></div>
+  </div>
+</div>
+
+<div class="phone" id="phone" style="display:none;">
 
   <!-- ===== OVERVIEW (DAY VIEW) ===== -->
   <div class="view active" id="view-overview">
@@ -326,6 +348,9 @@
       <h1>健康管理</h1>
       <div class="sub" id="healthStat"></div>
     </div>
+    <div class="section-head"><h2>健身模式</h2></div>
+    <div class="mgmt-list" id="workoutTypeList"></div>
+
     <div class="section-head"><h2>补充剂</h2></div>
     <div class="mgmt-list" id="supplementList"></div>
 
@@ -350,8 +375,14 @@
       <div class="more-row export" id="exportCompletionsRow"><span class="m-label">导出 task_completions.csv</span><span class="chev">›</span></div>
       <div class="more-row export" id="exportSuppRow"><span class="m-label">导出 supplements.csv</span><span class="chev">›</span></div>
       <div class="more-row export" id="exportSuppLogRow"><span class="m-label">导出 supplement_logs.csv</span><span class="chev">›</span></div>
-      <div class="more-row export" id="exportFitnessRow"><span class="m-label">导出 fitness_days.csv</span><span class="chev">›</span></div>
+      <div class="more-row export" id="exportWorkoutTypesRow"><span class="m-label">导出 workout_types.csv</span><span class="chev">›</span></div>
+      <div class="more-row export" id="exportWorkoutLogsRow"><span class="m-label">导出 workout_logs.csv</span><span class="chev">›</span></div>
       <div class="more-row export" id="exportMealsRow"><span class="m-label">导出 meals.csv</span><span class="chev">›</span></div>
+    </div>
+    <div class="group-label">账号</div>
+    <div class="more-group">
+      <div class="more-row"><span class="m-label" id="accountEmailLabel">已登录</span></div>
+      <div class="more-row export" id="signOutRow"><span class="m-label" style="color:var(--danger);">退出登录</span></div>
     </div>
   </div>
 
@@ -377,6 +408,12 @@
         <div class="f-row"><label>学期结束日期</label><input type="date" id="f_c_end"></div>
       </div>
       <div class="f-group"><div class="f-row"><label>颜色标记</label><div class="color-row" id="colorRow"></div></div></div>
+      <div class="f-group">
+        <div class="f-row">
+          <label style="display:flex; justify-content:space-between; align-items:center;">上课时段（可加多个）<button class="link-btn" id="newCourseAddSessionBtn" style="padding:0;">+ 添加时段</button></label>
+          <div id="newCourseSessionsList"></div>
+        </div>
+      </div>
       <div class="f-group"><div class="f-row"><label>备注</label><textarea id="f_c_notes" placeholder="任何想记的额外信息"></textarea></div></div>
     </div>
   </div>
@@ -410,6 +447,7 @@
           </div>
         </div>
         <div class="f-row" id="onceRow"><label>截止日期</label><input type="date" id="f_t_due"></div>
+        <div class="f-row" id="onceTimeRow"><label>具体时间（可留空）</label><input type="time" id="f_t_due_time"></div>
         <div class="f-row" id="repeatRow" style="display:none;">
           <label>重复星期（可多选）</label>
           <div class="chip-toggle-row" id="repeatDaysRow"></div>
@@ -441,11 +479,46 @@
     </div>
   </div>
 
+  <!-- ===== ADD WORKOUT TYPE SHEET ===== -->
+  <div class="sheet" id="workoutTypeSheet">
+    <div class="sheet-head">
+      <button class="sh-btn sh-cancel" id="wtSheetCancel">取消</button>
+      <div class="sh-title">新建健身模式</div>
+      <button class="sh-btn sh-save" id="wtSheetSave">保存</button>
+    </div>
+    <div class="sheet-body">
+      <div class="f-group">
+        <div class="f-row"><label>名称</label><input id="f_wt_name" placeholder="如：核心训练、游泳、无氧训练"></div>
+      </div>
+      <div class="f-group"><div class="f-row"><label>备注（可留空）</label><textarea id="f_wt_notes" placeholder="具体动作、强度等，你自己记得住就行"></textarea></div></div>
+    </div>
+  </div>
+
+  <!-- ===== HEALTH ADD CHOOSER SHEET ===== -->
+  <div class="sheet" id="healthChooserSheet">
+    <div class="sheet-head">
+      <button class="sh-btn sh-cancel" id="healthChooserCancel">取消</button>
+      <div class="sh-title">新建</div>
+      <div style="width:36px;"></div>
+    </div>
+    <div class="sheet-body">
+      <div class="f-group">
+        <div class="mgmt-row" id="chooserWorkoutType"><div class="c-body"><div class="c-title">健身模式</div><div class="c-sub">核心/游泳/无氧等分类</div></div><div class="chev">›</div></div>
+        <div class="mgmt-row" id="chooserSupplement" style="border-top:1px solid var(--hairline);"><div class="c-body"><div class="c-title">补充剂</div><div class="c-sub">鱼油、肌酸等</div></div><div class="chev">›</div></div>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 </div>
 
 <script>
 (function(){
+  const SUPABASE_URL = 'https://nhfkhlmqkayldqmzwvls.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_K9B-nlQaUKLXBkDE90cQcw_BnBiWzp5';
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  let currentUser = null;
+
   const DAYS = ['周一','周二','周三','周四','周五','周六','周日'];
   const DAY_LETTER = ['一','二','三','四','五','六','日'];
   const COLORS = ['#5B5A8C','#B5654A','#4C7A73','#A8763F','#7A5C7E','#5E6B7A'];
@@ -461,7 +534,7 @@
     {key:'more', label:'更多', icon:['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z','M8.3 12h.01','M12 12h.01','M15.7 12h.01'], soon:false},
   ];
 
-  let state = { courses: [], sessions: [], tasks: [], completions: [], supplements: [], supplement_logs: [], fitness_days: [], meals: [], assignments: [] };
+  let state = { courses: [], sessions: [], tasks: [], completions: [], supplements: [], supplement_logs: [], meals: [], assignments: [], workout_types: [], workout_logs: [] };
   let selectedColor = COLORS[0];
   let selectedPriority = '无';
   let taskType = 'once';
@@ -485,30 +558,51 @@
   function esc(s){ return (s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
   function timeMin(t){ if(!t) return 0; const [h,m]=t.split(':').map(Number); return h*60+m; }
 
-  const LS_PREFIX = 'selfops_';
   async function loadState(){
-    try{ const c = localStorage.getItem(LS_PREFIX+'courses'); state.courses = c ? JSON.parse(c) : []; }catch(e){ state.courses=[]; }
-    try{ const s = localStorage.getItem(LS_PREFIX+'sessions'); state.sessions = s ? JSON.parse(s) : []; }catch(e){ state.sessions=[]; }
-    try{ const t = localStorage.getItem(LS_PREFIX+'tasks'); state.tasks = t ? JSON.parse(t) : []; }catch(e){ state.tasks=[]; }
-    try{ const cp = localStorage.getItem(LS_PREFIX+'completions'); state.completions = cp ? JSON.parse(cp) : []; }catch(e){ state.completions=[]; }
-    try{ const sp = localStorage.getItem(LS_PREFIX+'supplements'); state.supplements = sp ? JSON.parse(sp) : []; }catch(e){ state.supplements=[]; }
-    try{ const sl = localStorage.getItem(LS_PREFIX+'supplement_logs'); state.supplement_logs = sl ? JSON.parse(sl) : []; }catch(e){ state.supplement_logs=[]; }
-    try{ const fd = localStorage.getItem(LS_PREFIX+'fitness_days'); state.fitness_days = fd ? JSON.parse(fd) : []; }catch(e){ state.fitness_days=[]; }
-    try{ const ml = localStorage.getItem(LS_PREFIX+'meals'); state.meals = ml ? JSON.parse(ml) : []; }catch(e){ state.meals=[]; }
-    try{ const ag = localStorage.getItem(LS_PREFIX+'assignments'); state.assignments = ag ? JSON.parse(ag) : []; }catch(e){ state.assignments=[]; }
+    if(!currentUser) return;
+    try{
+      const [c,s,t,cp,sp,sl,wt,wl,ml,ag] = await Promise.all([
+        sb.from('courses').select('*'),
+        sb.from('course_sessions').select('*'),
+        sb.from('tasks').select('*'),
+        sb.from('task_completions').select('*'),
+        sb.from('supplements').select('*'),
+        sb.from('supplement_logs').select('*'),
+        sb.from('workout_types').select('*'),
+        sb.from('workout_logs').select('*'),
+        sb.from('meals').select('*'),
+        sb.from('assignments').select('*'),
+      ]);
+      state.courses = c.data || [];
+      state.sessions = s.data || [];
+      state.tasks = t.data || [];
+      state.completions = cp.data || [];
+      state.supplements = sp.data || [];
+      state.supplement_logs = sl.data || [];
+      state.workout_types = wt.data || [];
+      state.workout_logs = wl.data || [];
+      state.meals = ml.data || [];
+      state.assignments = ag.data || [];
+    }catch(e){ console.error(e); toast('数据加载失败，请检查网络后刷新'); }
   }
   async function saveState(){
+    if(!currentUser) return;
     try{
-      localStorage.setItem(LS_PREFIX+'courses', JSON.stringify(state.courses));
-      localStorage.setItem(LS_PREFIX+'sessions', JSON.stringify(state.sessions));
-      localStorage.setItem(LS_PREFIX+'tasks', JSON.stringify(state.tasks));
-      localStorage.setItem(LS_PREFIX+'completions', JSON.stringify(state.completions));
-      localStorage.setItem(LS_PREFIX+'supplements', JSON.stringify(state.supplements));
-      localStorage.setItem(LS_PREFIX+'supplement_logs', JSON.stringify(state.supplement_logs));
-      localStorage.setItem(LS_PREFIX+'fitness_days', JSON.stringify(state.fitness_days));
-      localStorage.setItem(LS_PREFIX+'meals', JSON.stringify(state.meals));
-      localStorage.setItem(LS_PREFIX+'assignments', JSON.stringify(state.assignments));
-    }catch(e){ toast('保存失败，请重试'); }
+      const jobs = [];
+      if(state.courses.length) jobs.push(sb.from('courses').upsert(state.courses, {onConflict:'course_id'}));
+      if(state.sessions.length) jobs.push(sb.from('course_sessions').upsert(state.sessions, {onConflict:'session_id'}));
+      if(state.tasks.length) jobs.push(sb.from('tasks').upsert(state.tasks, {onConflict:'task_id'}));
+      if(state.completions.length) jobs.push(sb.from('task_completions').upsert(state.completions, {onConflict:'completion_id'}));
+      if(state.supplements.length) jobs.push(sb.from('supplements').upsert(state.supplements, {onConflict:'supplement_id'}));
+      if(state.supplement_logs.length) jobs.push(sb.from('supplement_logs').upsert(state.supplement_logs, {onConflict:'log_id'}));
+      if(state.workout_types.length) jobs.push(sb.from('workout_types').upsert(state.workout_types, {onConflict:'workout_type_id'}));
+      if(state.workout_logs.length) jobs.push(sb.from('workout_logs').upsert(state.workout_logs, {onConflict:'log_id'}));
+      if(state.meals.length) jobs.push(sb.from('meals').upsert(state.meals, {onConflict:'meal_id'}));
+      if(state.assignments.length) jobs.push(sb.from('assignments').upsert(state.assignments, {onConflict:'assignment_id'}));
+      const results = await Promise.all(jobs);
+      const failed = results.find(r=>r.error);
+      if(failed) throw failed.error;
+    }catch(e){ console.error(e); toast('保存失败，请检查网络'); }
   }
 
 
@@ -534,7 +628,12 @@
 
   function renderMore(){
     $('#soonModules').innerHTML = MODULES.map(m=>`<div class="more-row"><span class="m-label">${m.label}</span><span class="m-tag">开发中</span></div>`).join('');
+    if(currentUser) $('#accountEmailLabel').textContent = currentUser.email;
   }
+  $('#signOutRow').onclick = async ()=>{
+    if(!confirm('确定退出登录吗？')) return;
+    await sb.auth.signOut();
+  };
 
   // ================= OVERVIEW (DAY VIEW) =================
   function renderSummaryCard(){
@@ -625,6 +724,7 @@
         if(t.category) chips += `<span class="chip">${esc(t.category)}</span>`;
         if(t.priority && t.priority!=='无') chips += `<span class="chip priority-${t.priority}">${t.priority}优先级</span>`;
         if(t.is_recurring) chips += `<span class="chip">每周重复</span>`;
+        if(t.due_time) chips += `<span class="chip mono">${t.due_time}</span>`;
         return `<div class="task-row">
           <div class="t-check${done?' done':''}" data-task="${t.task_id}"></div>
           <div class="t-body">
@@ -644,10 +744,12 @@
     renderHealthBlock();
   }
 
-  function isFitnessDay(dateStr){ return state.fitness_days.includes(dateStr); }
-  async function toggleFitnessDay(dateStr){
-    if(state.fitness_days.includes(dateStr)) state.fitness_days = state.fitness_days.filter(d=>d!==dateStr);
-    else state.fitness_days.push(dateStr);
+  function isFitnessDay(dateStr){ return state.workout_logs.some(l=>l.date===dateStr); }
+  function isWorkoutLogged(typeId, dateStr){ return state.workout_logs.some(l=>l.workout_type_id===typeId && l.date===dateStr); }
+  async function toggleWorkoutLog(typeId, dateStr){
+    const idx = state.workout_logs.findIndex(l=>l.workout_type_id===typeId && l.date===dateStr);
+    if(idx>=0) state.workout_logs.splice(idx,1);
+    else state.workout_logs.push({log_id:uid('wlog'), workout_type_id:typeId, date:dateStr});
     await saveState();
   }
   function isSuppTaken(suppId, dateStr){ return state.supplement_logs.some(l=>l.supplement_id===suppId && l.date===dateStr); }
@@ -667,10 +769,15 @@
 
   function renderHealthBlock(){
     const gymDay = isFitnessDay(ovSelectedDate);
-    let html = `<div class="fitness-toggle-row">
-      <button class="fitness-btn${gymDay?' on':''}" id="fitnessOnBtn">健身</button>
-      <button class="fitness-btn${!gymDay?' on':''}" id="fitnessOffBtn">不健身</button>
-    </div>`;
+    let html = '';
+    if(state.workout_types.length===0){
+      html += `<div class="empty-block" style="margin:0 20px 14px;">还没有健身模式，去"健康"页新建（比如核心训练、游泳、无氧）</div>`;
+    }else{
+      html += `<div class="chip-toggle-row" style="margin:0 20px 14px; padding:0;">` + state.workout_types.map(wt=>{
+        const on = isWorkoutLogged(wt.workout_type_id, ovSelectedDate);
+        return `<span class="chip-toggle${on?' sel':''}" data-wt="${wt.workout_type_id}">${esc(wt.name)}</span>`;
+      }).join('') + `</div>`;
+    }
 
     html += `<div class="task-list" style="margin:0 20px 14px;">`;
     const applicable = state.supplements.filter(s=> s.schedule_type==='daily' || (s.schedule_type==='workout_day' && gymDay));
@@ -698,8 +805,9 @@
     html += `</div>`;
 
     $('#ovHealth').innerHTML = html;
-    $('#fitnessOnBtn').onclick = async ()=>{ if(!isFitnessDay(ovSelectedDate)){ await toggleFitnessDay(ovSelectedDate); renderOverview(); } };
-    $('#fitnessOffBtn').onclick = async ()=>{ if(isFitnessDay(ovSelectedDate)){ await toggleFitnessDay(ovSelectedDate); renderOverview(); } };
+    document.querySelectorAll('#ovHealth [data-wt]').forEach(chip=>{
+      chip.onclick = async ()=>{ await toggleWorkoutLog(chip.dataset.wt, ovSelectedDate); renderOverview(); };
+    });
     document.querySelectorAll('#ovHealth .supp-check-row .t-check').forEach(el=>{
       el.onclick = async ()=>{ await toggleSuppLog(el.dataset.supp, ovSelectedDate); renderOverview(); };
     });
@@ -900,6 +1008,7 @@
       chip.querySelector('.s-loc').onchange = upd;
       chip.querySelector('.s-del').onclick = async (e)=>{ e.stopPropagation();
         state.sessions = state.sessions.filter(x=>x.session_id!==sid);
+        await sb.from('course_sessions').delete().eq('session_id', sid);
         await saveState(); renderAll(); toast('时段已删除');
       };
     });
@@ -921,7 +1030,9 @@
     });
     detail.querySelectorAll('[data-del-assignment]').forEach(btn=>{
       btn.onclick = async (e)=>{ e.stopPropagation();
-        state.assignments = state.assignments.filter(x=>x.assignment_id!==btn.dataset.delAssignment);
+        const aid = btn.dataset.delAssignment;
+        state.assignments = state.assignments.filter(x=>x.assignment_id!==aid);
+        await sb.from('assignments').delete().eq('assignment_id', aid);
         await saveState(); renderAll();
       };
     });
@@ -943,6 +1054,7 @@
       state.courses = state.courses.filter(c=>c.course_id!==course.course_id);
       state.sessions = state.sessions.filter(s=>s.course_id!==course.course_id);
       state.assignments = state.assignments.filter(a=>a.course_id!==course.course_id);
+      await sb.from('courses').delete().eq('course_id', course.course_id); // 数据库级联删除会自动清掉时段和作业
       expandedCourseId = null;
       await saveState(); renderAll(); toast('课程已删除');
     };
@@ -963,6 +1075,7 @@
     renderTaskGroup($('#taskListOnce'), once, '还没有一次性任务，点右下角「+」新建一个');
   }
 
+  let editingTaskId = null;
   function renderTaskGroup(list, tasks, emptyMsg){
     if(tasks.length===0){
       list.innerHTML = `<div style="padding:24px 14px; text-align:center; color:var(--ink-2); font-size:13.5px;">${emptyMsg}</div>`;
@@ -975,7 +1088,7 @@
       const subtitle = kind==='daily'
         ? `每周${(t.repeat_days||[]).map(d=>d.replace('周','')).join('/')}` + (t.repeat_until?` · 至${t.repeat_until}`:'')
         : kind==='once'
-          ? (t.due_date ? `截止 ${t.due_date}` : '未设日期')
+          ? (t.due_date ? `截止 ${t.due_date}${t.due_time?' '+t.due_time:''}` : '未设日期')
           : '长期目标';
       const row = document.createElement('div');
       row.className = 'mgmt-row' + (expandedTaskId===t.task_id?' expanded':'');
@@ -986,23 +1099,67 @@
           <div class="c-sub">${esc(subtitle)}${course?' · '+esc(course.course_name):''}</div>
         </div>
         <div class="chev">›</div>`;
-      row.onclick = ()=>{ expandedTaskId = expandedTaskId===t.task_id?null:t.task_id; renderTaskMgmt(); };
+      row.onclick = ()=>{ expandedTaskId = expandedTaskId===t.task_id?null:t.task_id; editingTaskId=null; renderTaskMgmt(); };
       list.appendChild(row);
 
       const detail = document.createElement('div');
       detail.className = 'mgmt-detail' + (expandedTaskId===t.task_id?' open':'');
       if(expandedTaskId===t.task_id){
-        detail.innerHTML = `
-          ${t.category?`<div class="detail-line">分类：<b>${esc(t.category)}</b></div>`:''}
-          ${t.notes?`<div class="detail-line">备注：${esc(t.notes)}</div>`:''}
-          <div style="display:flex; justify-content:flex-end; margin-top:12px;"><button class="s-del" data-del-task="${t.task_id}" style="font-size:20px;">×</button></div>
-        `;
+        const isEditing = editingTaskId===t.task_id;
+        let html = `<div class="cd-section-head"><span>详情</span><button class="link-btn" data-toggle-task-edit="${t.task_id}">${isEditing?'完成':'修改'}</button></div>`;
+        if(!isEditing){
+          html += `<div class="session-view-row"><span>分类</span><span class="sv-loc">${esc(t.category)||'—'}</span></div>`;
+          html += `<div class="session-view-row"><span>优先级</span><span class="sv-loc">${esc(t.priority)||'无'}</span></div>`;
+          if(t.notes) html += `<div class="session-view-row"><span>备注</span><span class="sv-loc">${esc(t.notes)}</span></div>`;
+        }else{
+          html += `<div class="session-chip" style="flex-wrap:wrap;">
+            <input type="text" class="ted-title" placeholder="标题" value="${esc(t.title)}" style="flex:1 1 100%; font-family:-apple-system,sans-serif;">
+          </div>`;
+          html += `<div class="session-chip">
+            <input type="text" class="ted-category" placeholder="分类" value="${esc(t.category)}" style="flex:1; font-family:-apple-system,sans-serif;">
+            <select class="ted-priority">${PRIORITIES.map(p=>`<option ${p===t.priority?'selected':''}>${p}</option>`).join('')}</select>
+          </div>`;
+          if(kind==='once'){
+            html += `<div class="session-chip"><input type="date" class="ted-due" value="${t.due_date||''}"><input type="time" class="ted-due-time" value="${t.due_time||''}"></div>`;
+          }else if(kind==='daily'){
+            html += `<div class="chip-toggle-row" style="padding:8px 0;">` + DAYS.map(d=>`<span class="chip-toggle ted-day${(t.repeat_days||[]).includes(d)?' sel':''}" data-day="${d}">${d.replace('周','')}</span>`).join('') + `</div>`;
+          }
+          html += `<div class="session-chip"><input type="text" class="ted-notes" placeholder="备注" value="${esc(t.notes)}" style="flex:1; font-family:-apple-system,sans-serif;"></div>`;
+        }
+        html += `<div style="display:flex; justify-content:flex-end; margin-top:12px;"><button class="s-del" data-del-task="${t.task_id}" style="font-size:20px;">×</button></div>`;
+        detail.innerHTML = html;
         list.appendChild(detail);
+
+        detail.querySelector('[data-toggle-task-edit]').onclick = (e)=>{ e.stopPropagation();
+          editingTaskId = isEditing ? null : t.task_id; renderTaskMgmt();
+        };
+        if(isEditing){
+          const commit = async ()=>{
+            const titleInp = detail.querySelector('.ted-title'); if(titleInp && titleInp.value.trim()) t.title = titleInp.value.trim();
+            const catInp = detail.querySelector('.ted-category'); if(catInp) t.category = catInp.value.trim();
+            const prInp = detail.querySelector('.ted-priority'); if(prInp) t.priority = prInp.value;
+            const dueInp = detail.querySelector('.ted-due'); if(dueInp) t.due_date = dueInp.value;
+            const dueTimeInp = detail.querySelector('.ted-due-time'); if(dueTimeInp) t.due_time = dueTimeInp.value;
+            const notesInp = detail.querySelector('.ted-notes'); if(notesInp) t.notes = notesInp.value.trim();
+            await saveState(); renderOverview();
+          };
+          detail.querySelectorAll('.ted-title,.ted-category,.ted-priority,.ted-due,.ted-due-time,.ted-notes').forEach(el=>{ el.onchange = commit; });
+          detail.querySelectorAll('.ted-day').forEach(chip=>{
+            chip.onclick = async (e)=>{ e.stopPropagation();
+              const d = chip.dataset.day;
+              t.repeat_days = t.repeat_days || [];
+              if(t.repeat_days.includes(d)) t.repeat_days = t.repeat_days.filter(x=>x!==d);
+              else t.repeat_days.push(d);
+              await saveState(); renderTaskMgmt();
+            };
+          });
+        }
         detail.querySelector('[data-del-task]').onclick = async (e)=>{ e.stopPropagation();
           if(!confirm(`确定删除任务「${t.title}」吗？`)) return;
           state.tasks = state.tasks.filter(x=>x.task_id!==t.task_id);
           state.completions = state.completions.filter(c=>c.task_id!==t.task_id);
-          expandedTaskId = null;
+          await sb.from('tasks').delete().eq('task_id', t.task_id); // 级联清掉完成记录
+          expandedTaskId = null; editingTaskId = null;
           await saveState(); renderAll(); toast('任务已删除');
         };
       }else{
@@ -1016,7 +1173,8 @@
   // ================= HEALTH MANAGEMENT =================
   let expandedSuppId = null;
   function renderHealthMgmt(){
-    $('#healthStat').textContent = `共 ${state.supplements.length} 种补充剂`;
+    $('#healthStat').textContent = `${state.workout_types.length} 种健身模式 · ${state.supplements.length} 种补充剂`;
+    renderWorkoutTypeMgmt();
     const list = $('#supplementList');
     if(state.supplements.length===0){
       list.innerHTML = `<div style="padding:24px 14px; text-align:center; color:var(--ink-2); font-size:13.5px;">还没有补充剂，点右下角「+」新建一个</div>`;
@@ -1047,6 +1205,7 @@
           if(!confirm(`确定删除「${s.name}」吗？`)) return;
           state.supplements = state.supplements.filter(x=>x.supplement_id!==s.supplement_id);
           state.supplement_logs = state.supplement_logs.filter(l=>l.supplement_id!==s.supplement_id);
+          await sb.from('supplements').delete().eq('supplement_id', s.supplement_id); // 级联清掉打卡记录
           expandedSuppId = null;
           await saveState(); renderAll(); toast('补充剂已删除');
         };
@@ -1063,13 +1222,14 @@
     const y = now.getFullYear(), m = now.getMonth();
     const todayStr = fmtDate(now);
     const monthPrefix = `${y}-${String(m+1).padStart(2,'0')}`;
-    const markedThisMonth = state.fitness_days.filter(d=>d.startsWith(monthPrefix)).length;
+    const loggedDates = [...new Set(state.workout_logs.map(l=>l.date))];
+    const markedThisMonth = loggedDates.filter(d=>d.startsWith(monthPrefix)).length;
 
     let streak = 0;
     let cursor = new Date(now);
     while(true){
       const ds = fmtDate(cursor);
-      if(state.fitness_days.includes(ds)){ streak++; cursor.setDate(cursor.getDate()-1); }
+      if(isFitnessDay(ds)){ streak++; cursor.setDate(cursor.getDate()-1); }
       else break;
     }
 
@@ -1081,7 +1241,7 @@
       const d = new Date(gridStart); d.setDate(gridStart.getDate()+i);
       const ds = fmtDate(d);
       const inMonth = d.getMonth()===m;
-      const marked = state.fitness_days.includes(ds);
+      const marked = isFitnessDay(ds);
       cells += `<div class="fc-cell${marked?' marked':''}${ds===todayStr?' is-today':''}${inMonth?'':' other-month'}">${d.getDate()}</div>`;
     }
 
@@ -1092,6 +1252,45 @@
       </div>
       <div class="fc-grid">${cells}</div>
     `;
+  }
+
+  let expandedWorkoutTypeId = null;
+  function renderWorkoutTypeMgmt(){
+    const list = $('#workoutTypeList');
+    if(state.workout_types.length===0){
+      list.innerHTML = `<div style="padding:24px 14px; text-align:center; color:var(--ink-2); font-size:13.5px;">还没有健身模式，点右下角「+」新建一个</div>`;
+      return;
+    }
+    list.innerHTML = '';
+    state.workout_types.forEach(wt=>{
+      const row = document.createElement('div');
+      row.className = 'mgmt-row' + (expandedWorkoutTypeId===wt.workout_type_id?' expanded':'');
+      row.innerHTML = `
+        <div class="c-dot" style="background:var(--accent);"></div>
+        <div class="c-body"><div class="c-title">${esc(wt.name)}</div></div>
+        <div class="chev">›</div>`;
+      row.onclick = ()=>{ expandedWorkoutTypeId = expandedWorkoutTypeId===wt.workout_type_id?null:wt.workout_type_id; renderHealthMgmt(); };
+      list.appendChild(row);
+      const detail = document.createElement('div');
+      detail.className = 'mgmt-detail' + (expandedWorkoutTypeId===wt.workout_type_id?' open':'');
+      if(expandedWorkoutTypeId===wt.workout_type_id){
+        detail.innerHTML = `
+          ${wt.notes?`<div class="detail-line">备注：${esc(wt.notes)}</div>`:''}
+          <div style="display:flex; justify-content:flex-end; margin-top:12px;"><button class="s-del" data-del-wt="${wt.workout_type_id}" style="font-size:20px;">×</button></div>
+        `;
+        list.appendChild(detail);
+        detail.querySelector('[data-del-wt]').onclick = async (e)=>{ e.stopPropagation();
+          if(!confirm(`确定删除「${wt.name}」吗？相关打卡记录也会被删除。`)) return;
+          state.workout_types = state.workout_types.filter(x=>x.workout_type_id!==wt.workout_type_id);
+          state.workout_logs = state.workout_logs.filter(l=>l.workout_type_id!==wt.workout_type_id);
+          await sb.from('workout_types').delete().eq('workout_type_id', wt.workout_type_id); // 级联清掉打卡记录
+          expandedWorkoutTypeId = null;
+          await saveState(); renderAll(); toast('健身模式已删除');
+        };
+      }else{
+        list.appendChild(detail);
+      }
+    });
   }
 
   const suppSheet = $('#suppSheet');
@@ -1117,13 +1316,37 @@
     await saveState(); closeSuppSheet(); renderAll(); toast('补充剂已保存');
   };
 
+  // ================= WORKOUT TYPE SHEET =================
+  const workoutTypeSheet = $('#workoutTypeSheet');
+  function openWorkoutTypeSheet(){ workoutTypeSheet.classList.add('open'); backdrop.classList.add('open'); }
+  function closeWorkoutTypeSheet(){
+    workoutTypeSheet.classList.remove('open'); backdrop.classList.remove('open');
+    $('#f_wt_name').value=''; $('#f_wt_notes').value='';
+  }
+  $('#wtSheetCancel').onclick = closeWorkoutTypeSheet;
+  $('#wtSheetSave').onclick = async ()=>{
+    const name = $('#f_wt_name').value.trim();
+    if(!name){ toast('请填写名称'); return; }
+    state.workout_types.push({ workout_type_id:uid('wt'), name, notes:$('#f_wt_notes').value.trim() });
+    await saveState(); closeWorkoutTypeSheet(); renderAll(); toast('健身模式已保存');
+  };
+
+  // ================= HEALTH ADD CHOOSER SHEET =================
+  const healthChooserSheet = $('#healthChooserSheet');
+  function openHealthChooserSheet(){ healthChooserSheet.classList.add('open'); backdrop.classList.add('open'); }
+  function closeHealthChooserSheet(){ healthChooserSheet.classList.remove('open'); backdrop.classList.remove('open'); }
+  $('#healthChooserCancel').onclick = closeHealthChooserSheet;
+  $('#chooserWorkoutType').onclick = ()=>{ closeHealthChooserSheet(); openWorkoutTypeSheet(); };
+  $('#chooserSupplement').onclick = ()=>{ closeHealthChooserSheet(); openSuppSheet(); };
+
   // ================= COURSE SHEET =================
   const courseSheet = $('#courseSheet'), backdrop = $('#sheetBackdrop');
-  function openCourseSheet(){ renderColorRow(); courseSheet.classList.add('open'); backdrop.classList.add('open'); }
+  let newCourseSessions = [];
+  function openCourseSheet(){ renderColorRow(); newCourseSessions=[]; renderNewCourseSessions(); courseSheet.classList.add('open'); backdrop.classList.add('open'); }
   function closeCourseSheet(){
     courseSheet.classList.remove('open'); backdrop.classList.remove('open');
     ['f_c_name','f_c_instructor','f_c_location','f_c_start','f_c_end','f_c_notes'].forEach(id=>$('#'+id).value='');
-    selectedColor = COLORS[0];
+    selectedColor = COLORS[0]; newCourseSessions=[]; renderNewCourseSessions();
   }
   $('#courseSheetCancel').onclick = closeCourseSheet;
   function renderColorRow(){
@@ -1136,11 +1359,36 @@
       row.appendChild(d);
     });
   }
+  function renderNewCourseSessions(){
+    const wrap = $('#newCourseSessionsList');
+    if(newCourseSessions.length===0){ wrap.innerHTML = `<div style="font-size:12px; color:var(--ink-2); padding:6px 0;">还没加时段，可以先保存课程，也可以现在就加</div>`; return; }
+    wrap.innerHTML = newCourseSessions.map((s,i)=>`
+      <div class="session-chip" data-idx="${i}">
+        <select class="ncs-day">${DAYS.map(d=>`<option ${d===s.day_of_week?'selected':''}>${d}</option>`).join('')}</select>
+        <input type="time" class="ncs-start" value="${s.start_time}">
+        <input type="time" class="ncs-end" value="${s.end_time}">
+        <input type="text" class="ncs-loc" placeholder="地点覆盖" value="${esc(s.location||'')}">
+        <button class="s-del ncs-del">×</button>
+      </div>`).join('');
+    wrap.querySelectorAll('.session-chip').forEach(chip=>{
+      const i = parseInt(chip.dataset.idx);
+      chip.querySelector('.ncs-day').onchange = e=> newCourseSessions[i].day_of_week = e.target.value;
+      chip.querySelector('.ncs-start').onchange = e=> newCourseSessions[i].start_time = e.target.value;
+      chip.querySelector('.ncs-end').onchange = e=> newCourseSessions[i].end_time = e.target.value;
+      chip.querySelector('.ncs-loc').onchange = e=> newCourseSessions[i].location = e.target.value;
+      chip.querySelector('.ncs-del').onclick = ()=>{ newCourseSessions.splice(i,1); renderNewCourseSessions(); };
+    });
+  }
+  $('#newCourseAddSessionBtn').onclick = (e)=>{ e.preventDefault();
+    newCourseSessions.push({day_of_week:DAYS[todayIndex()], start_time:'09:00', end_time:'10:30', location:''});
+    renderNewCourseSessions();
+  };
   $('#courseSheetSave').onclick = async ()=>{
     const name = $('#f_c_name').value.trim();
     if(!name){ toast('请填写课程名称'); return; }
+    const newCourseId = uid('course');
     state.courses.push({
-      course_id: uid('course'), course_name: name,
+      course_id: newCourseId, course_name: name,
       instructor: $('#f_c_instructor').value.trim(),
       default_location: $('#f_c_location').value.trim(),
       semester_start_date: $('#f_c_start').value,
@@ -1148,6 +1396,9 @@
       subtitle_folder_path: '',
       color_tag: selectedColor,
       notes: $('#f_c_notes').value.trim(),
+    });
+    newCourseSessions.forEach(s=>{
+      state.sessions.push({ session_id: uid('sess'), course_id: newCourseId, day_of_week: s.day_of_week, start_time: s.start_time, end_time: s.end_time, location: s.location });
     });
     await saveState(); closeCourseSheet(); renderAll(); toast('课程已保存');
   };
@@ -1160,12 +1411,12 @@
   }
   function closeTaskSheet(){
     taskSheet.classList.remove('open'); backdrop.classList.remove('open');
-    ['f_t_title','f_t_category','f_t_due','f_t_until','f_t_notes'].forEach(id=>$('#'+id).value='');
+    ['f_t_title','f_t_category','f_t_due','f_t_due_time','f_t_until','f_t_notes'].forEach(id=>$('#'+id).value='');
     $('#f_t_course').value = '';
     selectedPriority = '无'; selectedRepeatDays = []; taskType = 'once';
   }
   $('#taskSheetCancel').onclick = closeTaskSheet;
-  backdrop.onclick = ()=>{ closeCourseSheet(); closeTaskSheet(); closeSuppSheet(); };
+  backdrop.onclick = ()=>{ closeCourseSheet(); closeTaskSheet(); closeSuppSheet(); closeWorkoutTypeSheet(); closeHealthChooserSheet(); };
 
   function renderCourseSelect(){
     const sel = $('#f_t_course');
@@ -1199,6 +1450,7 @@
     taskType = type;
     document.querySelectorAll('#typeSegment button').forEach(b=>b.classList.toggle('sel', b.dataset.type===type));
     $('#onceRow').style.display = type==='once' ? 'block':'none';
+    $('#onceTimeRow').style.display = type==='once' ? 'block':'none';
     $('#repeatRow').style.display = type==='daily' ? 'block':'none';
     $('#untilRow').style.display = type==='daily' ? 'block':'none';
   }
@@ -1216,6 +1468,7 @@
       task_kind: taskType,
       is_recurring: taskType==='daily',
       due_date: taskType==='once' ? $('#f_t_due').value : '',
+      due_time: taskType==='once' ? $('#f_t_due_time').value : '',
       repeat_days: taskType==='daily' ? [...selectedRepeatDays] : [],
       repeat_until: taskType==='daily' ? $('#f_t_until').value : '',
       done: false,
@@ -1228,7 +1481,7 @@
   $('#fabAdd').onclick = ()=>{
     if(activeTab==='courses') openCourseSheet();
     else if(activeTab==='tasks') openTaskSheet();
-    else if(activeTab==='health') openSuppSheet();
+    else if(activeTab==='health') openHealthChooserSheet();
   };
 
   // ================= EXPORT =================
@@ -1250,7 +1503,8 @@
   $('#exportCompletionsRow').onclick = ()=> download('task_completions.csv', toCsv(state.completions, ['completion_id','task_id','date']), 'text/csv');
   $('#exportSuppRow').onclick = ()=> download('supplements.csv', toCsv(state.supplements, ['supplement_id','name','schedule_type','notes']), 'text/csv');
   $('#exportSuppLogRow').onclick = ()=> download('supplement_logs.csv', toCsv(state.supplement_logs, ['log_id','supplement_id','date']), 'text/csv');
-  $('#exportFitnessRow').onclick = ()=> download('fitness_days.csv', toCsv(state.fitness_days.map(d=>({date:d})), ['date']), 'text/csv');
+  $('#exportWorkoutTypesRow').onclick = ()=> download('workout_types.csv', toCsv(state.workout_types, ['workout_type_id','name','notes']), 'text/csv');
+  $('#exportWorkoutLogsRow').onclick = ()=> download('workout_logs.csv', toCsv(state.workout_logs, ['log_id','workout_type_id','date']), 'text/csv');
   $('#exportMealsRow').onclick = ()=> download('meals.csv', toCsv(state.meals, ['meal_id','date','slot','content']), 'text/csv');
 
   function seedRealCourses(){
@@ -1280,6 +1534,15 @@
         { supplement_id:uid('supp'), name:'鱼油', schedule_type:'daily', notes:'' },
         { supplement_id:uid('supp'), name:'葡萄糖胺软骨素', schedule_type:'daily', notes:'关节保健品' },
         { supplement_id:uid('supp'), name:'肌酸', schedule_type:'workout_day', notes:'只在健身日吃' },
+      ];
+    }
+    if(state.workout_types.length===0){
+      state.workout_types = [
+        { workout_type_id:uid('wt'), name:'肩颈', notes:'' },
+        { workout_type_id:uid('wt'), name:'腿', notes:'' },
+        { workout_type_id:uid('wt'), name:'核心', notes:'死虫式/平板支撑/鸟狗式/俄罗斯转体/侧平板' },
+        { workout_type_id:uid('wt'), name:'游泳', notes:'' },
+        { workout_type_id:uid('wt'), name:'无氧', notes:'' },
       ];
     }
     if(state.tasks.length===0){
@@ -1315,22 +1578,48 @@
     }, {passive:true});
   })();
 
-  // ================= INIT =================
-  const SEED_VERSION = 'v3';
-  (async function init(){
-    renderTabbar(); renderMore();
-    await loadState();
-    let seedVer = null;
-    try{ seedVer = localStorage.getItem(LS_PREFIX+'seed_version'); }catch(e){}
-    if(state.courses.length===0 || seedVer !== SEED_VERSION){
-      seedRealCourses();
-      try{ localStorage.setItem(LS_PREFIX+'seed_version', SEED_VERSION); }catch(e){}
-    }
+  // ================= AUTH =================
+  function showApp(){
+    $('#loginScreen').style.display = 'none';
+    $('#phone').style.display = 'block';
+  }
+  function showLogin(){
+    $('#loginScreen').style.display = 'flex';
+    $('#phone').style.display = 'none';
+  }
+  $('#loginSendBtn').onclick = async ()=>{
+    const email = $('#loginEmail').value.trim();
+    const msgEl = $('#loginMsg');
+    if(!email || !email.includes('@')){ msgEl.textContent = '请输入有效的邮箱地址'; msgEl.className='login-msg error'; return; }
+    $('#loginSendBtn').disabled = true; $('#loginSendBtn').textContent = '发送中...';
+    const { error } = await sb.auth.signInWithOtp({ email, options:{ emailRedirectTo: window.location.href } });
+    $('#loginSendBtn').disabled = false; $('#loginSendBtn').textContent = '发送登录链接';
+    if(error){ msgEl.textContent = '发送失败：'+error.message; msgEl.className='login-msg error'; }
+    else{ msgEl.textContent = '登录链接已发到 '+email+'，去邮箱点开它，会自动带你回到这里。'; msgEl.className='login-msg'; }
+  };
+
+  async function bootApp(){
     seedHealthAndTasks();
+    if(state.courses.length===0) seedRealCourses();
     await saveState();
+    renderTabbar(); renderMore();
     renderAll();
     $('#fabAdd').style.display = 'none';
-  })();
+  }
+
+  sb.auth.onAuthStateChange(async (event, session)=>{
+    if(session && session.user){
+      const isNewLogin = !currentUser;
+      currentUser = session.user;
+      showApp();
+      if(window.location.hash.includes('access_token')) history.replaceState(null, '', window.location.pathname);
+      await loadState();
+      await bootApp();
+    }else{
+      currentUser = null;
+      showLogin();
+    }
+  });
 })();
 </script>
 </body>
