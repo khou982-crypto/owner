@@ -796,6 +796,7 @@
       if(icsPendingItems[i].status==='pending') await acceptOneCanvasItem(i);
     }
     toast('已全部接受');
+    canvasPendingSheet.classList.remove('open'); backdrop.classList.remove('open');
   };
   $('#canvasPendingClose').onclick = ()=>{ canvasPendingSheet.classList.remove('open'); backdrop.classList.remove('open'); };
 
