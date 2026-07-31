@@ -561,8 +561,7 @@
       if(state.completions.length) jobs.push(sb.from('task_completions').upsert(state.completions, {onConflict:'completion_id'}));
       if(state.supplements.length) jobs.push(sb.from('supplements').upsert(state.supplements, {onConflict:'supplement_id'}));
       if(state.supplement_logs.length) jobs.push(sb.from('supplement_logs').upsert(state.supplement_logs, {onConflict:'log_id'}));
-      if(state.workout_types.length) jobs.push(sb.from('workout_types').upsert(state.workout_types, {onConflict:'workout_type_id'}));
-      if(state.workout_logs.length) jobs.push(sb.from('workout_logs').upsert(state.workout_logs, {onConflict:'log_id'}));
+      if(state.fitness_days.length) jobs.push(sb.from('fitness_days').upsert(state.fitness_days, {onConflict:'id'}));
       if(state.meals.length) jobs.push(sb.from('meals').upsert(state.meals, {onConflict:'meal_id'}));
       if(state.assignments.length) jobs.push(sb.from('assignments').upsert(state.assignments, {onConflict:'assignment_id'}));
       const results = await Promise.all(jobs);
@@ -710,12 +709,15 @@
     renderHealthBlock();
   }
 
-  function isFitnessDay(dateStr){ return state.workout_logs.some(l=>l.date===dateStr); }
-  function isWorkoutLogged(typeId, dateStr){ return state.workout_logs.some(l=>l.workout_type_id===typeId && l.date===dateStr); }
-  async function toggleWorkoutLog(typeId, dateStr){
-    const idx = state.workout_logs.findIndex(l=>l.workout_type_id===typeId && l.date===dateStr);
-    if(idx>=0) state.workout_logs.splice(idx,1);
-    else state.workout_logs.push({log_id:uid('wlog'), workout_type_id:typeId, date:dateStr});
+  function isFitnessDay(dateStr){ return state.fitness_days.some(f=>f.date===dateStr); }
+  async function toggleFitnessDay(dateStr){
+    const existing = state.fitness_days.find(f=>f.date===dateStr);
+    if(existing){
+      state.fitness_days = state.fitness_days.filter(f=>f.date!==dateStr);
+      await sb.from('fitness_days').delete().eq('id', existing.id);
+    }else{
+      state.fitness_days.push({id:uid('fit'), date:dateStr});
+    }
     await saveState();
   }
   function isSuppTaken(suppId, dateStr){ return state.supplement_logs.some(l=>l.supplement_id===suppId && l.date===dateStr); }
@@ -735,15 +737,10 @@
 
   function renderHealthBlock(){
     const gymDay = isFitnessDay(ovSelectedDate);
-    let html = '';
-    if(state.workout_types.length===0){
-      html += `<div class="empty-block" style="margin:0 20px 14px;">还没有健身模式，去"健康"页新建（比如核心训练、游泳、无氧）</div>`;
-    }else{
-      html += `<div class="chip-toggle-row" style="margin:0 20px 14px; padding:0;">` + state.workout_types.map(wt=>{
-        const on = isWorkoutLogged(wt.workout_type_id, ovSelectedDate);
-        return `<span class="chip-toggle${on?' sel':''}" data-wt="${wt.workout_type_id}">${esc(wt.name)}</span>`;
-      }).join('') + `</div>`;
-    }
+    let html = `<div class="fitness-toggle-row" style="padding:0 20px 14px; display:flex; gap:10px;">
+      <button class="fitness-btn${gymDay?' on':''}" id="fitnessOnBtn">健身</button>
+      <button class="fitness-btn${!gymDay?' on':''}" id="fitnessOffBtn">不健身</button>
+    </div>`;
 
     html += `<div class="task-list" style="margin:0 20px 14px;">`;
     const applicable = state.supplements.filter(s=> s.schedule_type==='daily' || (s.schedule_type==='workout_day' && gymDay));
@@ -771,9 +768,8 @@
     html += `</div>`;
 
     $('#ovHealth').innerHTML = html;
-    document.querySelectorAll('#ovHealth [data-wt]').forEach(chip=>{
-      chip.onclick = async ()=>{ await toggleWorkoutLog(chip.dataset.wt, ovSelectedDate); renderOverview(); };
-    });
+    $('#fitnessOnBtn').onclick = async ()=>{ if(!isFitnessDay(ovSelectedDate)){ await toggleFitnessDay(ovSelectedDate); renderOverview(); } };
+    $('#fitnessOffBtn').onclick = async ()=>{ if(isFitnessDay(ovSelectedDate)){ await toggleFitnessDay(ovSelectedDate); renderOverview(); } };
     document.querySelectorAll('#ovHealth .supp-check-row .t-check').forEach(el=>{
       el.onclick = async ()=>{ await toggleSuppLog(el.dataset.supp, ovSelectedDate); renderOverview(); };
     });
@@ -1139,8 +1135,7 @@
   // ================= HEALTH MANAGEMENT =================
   let expandedSuppId = null;
   function renderHealthMgmt(){
-    $('#healthStat').textContent = `${state.workout_types.length} 种健身模式 · ${state.supplements.length} 种补充剂`;
-    renderWorkoutTypeMgmt();
+    $('#healthStat').textContent = `${state.supplements.length} 种补充剂`;
     const list = $('#supplementList');
     if(state.supplements.length===0){
       list.innerHTML = `<div style="padding:24px 14px; text-align:center; color:var(--ink-2); font-size:13.5px;">还没有补充剂，点右下角「+」新建一个</div>`;
@@ -1199,8 +1194,7 @@
     const y = now.getFullYear(), m = now.getMonth();
     const todayStr = fmtDate(now);
     const monthPrefix = `${y}-${String(m+1).padStart(2,'0')}`;
-    const loggedDates = [...new Set(state.workout_logs.map(l=>l.date))];
-    const markedThisMonth = loggedDates.filter(d=>d.startsWith(monthPrefix)).length;
+    const markedThisMonth = state.fitness_days.filter(f=>f.date.startsWith(monthPrefix)).length;
 
     let streak = 0;
     let cursor = new Date(now);
@@ -1231,56 +1225,6 @@
     `;
   }
 
-  let expandedWorkoutTypeId = null;
-  function renderWorkoutTypeMgmt(){
-    const list = $('#workoutTypeList');
-    if(state.workout_types.length===0){
-      list.innerHTML = `<div style="padding:24px 14px; text-align:center; color:var(--ink-2); font-size:13.5px;">还没有健身模式，点右下角「+」新建一个</div>`;
-      return;
-    }
-    list.innerHTML = '';
-    state.workout_types.forEach(wt=>{
-      const row = document.createElement('div');
-      row.className = 'mgmt-row' + (expandedWorkoutTypeId===wt.workout_type_id?' expanded':'');
-      row.innerHTML = `
-        <div class="c-dot" style="background:var(--accent);"></div>
-        <div class="c-body"><div class="c-title">${esc(wt.name)}</div></div>
-        <div class="chev">›</div>`;
-      row.onclick = ()=>{ expandedWorkoutTypeId = expandedWorkoutTypeId===wt.workout_type_id?null:wt.workout_type_id; renderHealthMgmt(); };
-      list.appendChild(row);
-      const detail = document.createElement('div');
-      detail.className = 'mgmt-detail' + (expandedWorkoutTypeId===wt.workout_type_id?' open':'');
-      if(expandedWorkoutTypeId===wt.workout_type_id){
-        detail.innerHTML = `
-          <div class="f-group" style="margin-top:6px;">
-            <div class="f-row"><label>名称</label><input type="text" class="wt-edit-name" value="${esc(wt.name)}"></div>
-            <div class="f-row"><label>备注（可留空）</label><input type="text" class="wt-edit-notes" placeholder="动作清单等" value="${esc(wt.notes||'')}"></div>
-          </div>
-          <div style="display:flex; justify-content:flex-end; margin-top:8px;"><button class="s-del" data-del-wt="${wt.workout_type_id}" style="font-size:20px;">×</button></div>
-        `;
-        list.appendChild(detail);
-        const commitWt = async ()=>{
-          const nameInp = detail.querySelector('.wt-edit-name');
-          if(nameInp.value.trim()) wt.name = nameInp.value.trim();
-          wt.notes = detail.querySelector('.wt-edit-notes').value.trim();
-          await saveState(); renderAll();
-        };
-        detail.querySelector('.wt-edit-name').onchange = commitWt;
-        detail.querySelector('.wt-edit-notes').onchange = commitWt;
-        detail.querySelector('[data-del-wt]').onclick = async (e)=>{ e.stopPropagation();
-          if(!confirm(`确定删除「${wt.name}」吗？相关打卡记录也会被删除。`)) return;
-          state.workout_types = state.workout_types.filter(x=>x.workout_type_id!==wt.workout_type_id);
-          state.workout_logs = state.workout_logs.filter(l=>l.workout_type_id!==wt.workout_type_id);
-          await sb.from('workout_types').delete().eq('workout_type_id', wt.workout_type_id); // 级联清掉打卡记录
-          expandedWorkoutTypeId = null;
-          await saveState(); renderAll(); toast('健身模式已删除');
-        };
-      }else{
-        list.appendChild(detail);
-      }
-    });
-  }
-
   const suppSheet = $('#suppSheet');
   let suppType = 'daily';
   function openSuppSheet(){
@@ -1303,29 +1247,6 @@
     state.supplements.push({ supplement_id:uid('supp'), name, schedule_type:suppType, notes:$('#f_s_notes').value.trim() });
     await saveState(); closeSuppSheet(); renderAll(); toast('补充剂已保存');
   };
-
-  // ================= WORKOUT TYPE SHEET =================
-  const workoutTypeSheet = $('#workoutTypeSheet');
-  function openWorkoutTypeSheet(){ workoutTypeSheet.classList.add('open'); backdrop.classList.add('open'); }
-  function closeWorkoutTypeSheet(){
-    workoutTypeSheet.classList.remove('open'); backdrop.classList.remove('open');
-    $('#f_wt_name').value=''; $('#f_wt_notes').value='';
-  }
-  $('#wtSheetCancel').onclick = closeWorkoutTypeSheet;
-  $('#wtSheetSave').onclick = async ()=>{
-    const name = $('#f_wt_name').value.trim();
-    if(!name){ toast('请填写名称'); return; }
-    state.workout_types.push({ workout_type_id:uid('wt'), name, notes:$('#f_wt_notes').value.trim() });
-    await saveState(); closeWorkoutTypeSheet(); renderAll(); toast('健身模式已保存');
-  };
-
-  // ================= HEALTH ADD CHOOSER SHEET =================
-  const healthChooserSheet = $('#healthChooserSheet');
-  function openHealthChooserSheet(){ healthChooserSheet.classList.add('open'); backdrop.classList.add('open'); }
-  function closeHealthChooserSheet(){ healthChooserSheet.classList.remove('open'); backdrop.classList.remove('open'); }
-  $('#healthChooserCancel').onclick = closeHealthChooserSheet;
-  $('#chooserWorkoutType').onclick = ()=>{ closeHealthChooserSheet(); openWorkoutTypeSheet(); };
-  $('#chooserSupplement').onclick = ()=>{ closeHealthChooserSheet(); openSuppSheet(); };
 
   // ================= COURSE SHEET =================
   const courseSheet = $('#courseSheet'), backdrop = $('#sheetBackdrop');
@@ -1404,7 +1325,7 @@
     selectedPriority = '无'; selectedRepeatDays = []; taskType = 'once';
   }
   $('#taskSheetCancel').onclick = closeTaskSheet;
-  backdrop.onclick = ()=>{ closeCourseSheet(); closeTaskSheet(); closeSuppSheet(); closeWorkoutTypeSheet(); closeHealthChooserSheet(); };
+  backdrop.onclick = ()=>{ closeCourseSheet(); closeTaskSheet(); closeSuppSheet(); };
 
   function renderCourseSelect(){
     const sel = $('#f_t_course');
@@ -1469,7 +1390,7 @@
   $('#fabAdd').onclick = ()=>{
     if(activeTab==='courses') openCourseSheet();
     else if(activeTab==='tasks') openTaskSheet();
-    else if(activeTab==='health') openHealthChooserSheet();
+    else if(activeTab==='health') openSuppSheet();
   };
 
   // ================= EXPORT =================
@@ -1491,8 +1412,7 @@
   $('#exportCompletionsRow').onclick = ()=> download('task_completions.csv', toCsv(state.completions, ['completion_id','task_id','date']), 'text/csv');
   $('#exportSuppRow').onclick = ()=> download('supplements.csv', toCsv(state.supplements, ['supplement_id','name','schedule_type','notes']), 'text/csv');
   $('#exportSuppLogRow').onclick = ()=> download('supplement_logs.csv', toCsv(state.supplement_logs, ['log_id','supplement_id','date']), 'text/csv');
-  $('#exportWorkoutTypesRow').onclick = ()=> download('workout_types.csv', toCsv(state.workout_types, ['workout_type_id','name','notes']), 'text/csv');
-  $('#exportWorkoutLogsRow').onclick = ()=> download('workout_logs.csv', toCsv(state.workout_logs, ['log_id','workout_type_id','date']), 'text/csv');
+  $('#exportFitnessRow').onclick = ()=> download('fitness_days.csv', toCsv(state.fitness_days, ['id','date']), 'text/csv');
   $('#exportMealsRow').onclick = ()=> download('meals.csv', toCsv(state.meals, ['meal_id','date','slot','content']), 'text/csv');
 
   function seedRealCourses(){
@@ -1522,15 +1442,6 @@
         { supplement_id:uid('supp'), name:'鱼油', schedule_type:'daily', notes:'' },
         { supplement_id:uid('supp'), name:'葡萄糖胺软骨素', schedule_type:'daily', notes:'关节保健品' },
         { supplement_id:uid('supp'), name:'肌酸', schedule_type:'workout_day', notes:'只在健身日吃' },
-      ];
-    }
-    if(state.workout_types.length===0){
-      state.workout_types = [
-        { workout_type_id:uid('wt'), name:'肩颈', notes:'' },
-        { workout_type_id:uid('wt'), name:'腿', notes:'' },
-        { workout_type_id:uid('wt'), name:'核心', notes:'死虫式/平板支撑/鸟狗式/俄罗斯转体/侧平板' },
-        { workout_type_id:uid('wt'), name:'游泳', notes:'' },
-        { workout_type_id:uid('wt'), name:'无氧', notes:'' },
       ];
     }
     if(state.tasks.length===0){
