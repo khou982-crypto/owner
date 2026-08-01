@@ -27,6 +27,8 @@
     --danger-tint:#F8E9E9;
     --good:#5C8368;
     --good-tint:#E7EFE9;
+    --sugar:#B5772E;
+    --sugar-tint:#F5EADA;
     --radius-lg:20px;
     --radius-md:14px;
     --radius-sm:10px;
@@ -114,6 +116,7 @@
   .month-pill{ font-size:7.5px; font-weight:600; padding:1.5px 4px; border-radius:4px; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; line-height:1.5; }
   .month-pill.task-pill{ background:var(--accent); }
   .month-pill.fit-pill{ background:var(--good); }
+  .month-pill.sugar-pill{ background:var(--sugar); }
   .month-more{ font-size:7px; color:var(--ink-2); padding-left:2px; }
 
   .fitness-chart-card{ margin:0 20px; background:var(--surface); border-radius:var(--radius-md); padding:16px; box-shadow:var(--shadow-card); }
@@ -124,6 +127,7 @@
   .fc-weekday{ text-align:center; font-size:9.5px; color:var(--ink-2); padding-bottom:4px; }
   .fc-cell{ aspect-ratio:1/1; border-radius:6px; background:var(--bg-grouped); display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--ink-3); }
   .fc-cell.marked{ background:var(--good); color:#fff; font-weight:600; }
+  .fc-cell.marked.sugar-marked{ background:var(--sugar); }
   .fc-cell.is-today{ box-shadow:inset 0 0 0 1.5px var(--accent); }
   .fc-cell.other-month{ opacity:0.22; }
 
@@ -131,6 +135,7 @@
   .fitness-toggle-row{ margin:0 20px 14px; display:flex; gap:10px; }
   .fitness-btn{ flex:1; padding:12px 0; border-radius:12px; text-align:center; font-size:13.5px; font-weight:600; border:1px solid var(--hairline-strong); background:var(--surface); color:var(--ink-2); cursor:pointer; }
   .fitness-btn.on{ background:var(--accent-tint); border-color:var(--accent); color:var(--accent-deep); }
+  .sugar-btn.on{ background:var(--sugar-tint); border-color:var(--sugar); color:var(--sugar); }
   .supp-check-row{ display:flex; align-items:center; gap:11px; padding:12px 14px; border-bottom:1px solid var(--hairline); }
   .supp-check-row:last-child{ border-bottom:none; }
   .supp-name{ flex:1; font-size:14px; font-weight:500; }
@@ -336,6 +341,7 @@
       <div style="padding:0 20px; display:flex; gap:12px; font-size:11px; color:var(--ink-2); flex-wrap:wrap;">
         <div style="display:flex; align-items:center; gap:5px;"><span class="month-pill task-pill" style="padding:2px 6px;">任务</span></div>
         <div style="display:flex; align-items:center; gap:5px;"><span class="month-pill fit-pill" style="padding:2px 6px;">健身</span></div>
+        <div style="display:flex; align-items:center; gap:5px;"><span class="month-pill sugar-pill" style="padding:2px 6px;">控糖</span></div>
       </div>
     </div>
   </div>
@@ -374,6 +380,9 @@
 
     <div class="section-head"><h2>锻炼记录</h2></div>
     <div class="fitness-chart-card" id="fitnessChartCard"></div>
+
+    <div class="section-head"><h2>控糖记录</h2></div>
+    <div class="fitness-chart-card" id="sugarChartCard"></div>
   </div>
 
   <!-- ===== MORE ===== -->
@@ -399,6 +408,7 @@
       <div class="more-row export" id="exportSuppRow"><span class="m-label">导出 supplements.csv</span><span class="chev">›</span></div>
       <div class="more-row export" id="exportSuppLogRow"><span class="m-label">导出 supplement_logs.csv</span><span class="chev">›</span></div>
       <div class="more-row export" id="exportFitnessRow"><span class="m-label">导出 fitness_days.csv</span><span class="chev">›</span></div>
+      <div class="more-row export" id="exportSugarRow"><span class="m-label">导出 sugar_days.csv</span><span class="chev">›</span></div>
       <div class="more-row export" id="exportMealsRow"><span class="m-label">导出 meals.csv</span><span class="chev">›</span></div>
     </div>
     <div class="group-label">账号</div>
@@ -555,7 +565,7 @@
     {key:'more', label:'更多', icon:['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z','M8.3 12h.01','M12 12h.01','M15.7 12h.01'], soon:false},
   ];
 
-  let state = { courses: [], sessions: [], tasks: [], completions: [], supplements: [], supplement_logs: [], meals: [], assignments: [], fitness_days: [] };
+  let state = { courses: [], sessions: [], tasks: [], completions: [], supplements: [], supplement_logs: [], meals: [], assignments: [], fitness_days: [], sugar_days: [] };
   let selectedColor = COLORS[0];
   let selectedPriority = '无';
   let taskType = 'once';
@@ -589,7 +599,7 @@
   async function loadState(){
     if(!currentUser) return;
     try{
-      const [c,s,t,cp,sp,sl,fd,ml,ag] = await Promise.all([
+      const [c,s,t,cp,sp,sl,fd,ml,ag,sd] = await Promise.all([
         sb.from('courses').select('*'),
         sb.from('course_sessions').select('*'),
         sb.from('tasks').select('*'),
@@ -599,6 +609,7 @@
         sb.from('fitness_days').select('*'),
         sb.from('meals').select('*'),
         sb.from('assignments').select('*'),
+        sb.from('sugar_days').select('*'),
       ]);
       state.courses = c.data || [];
       state.sessions = s.data || [];
@@ -607,6 +618,7 @@
       state.supplements = sp.data || [];
       state.supplement_logs = sl.data || [];
       state.fitness_days = fd.data || [];
+      state.sugar_days = sd.data || [];
       state.meals = ml.data || [];
       state.assignments = ag.data || [];
     }catch(e){ console.error(e); toast('数据加载失败，请检查网络后刷新'); }
@@ -635,6 +647,7 @@
       if(state.supplements.length) jobs.push(sb.from('supplements').upsert(cleanRows(state.supplements), {onConflict:'supplement_id'}));
       if(state.supplement_logs.length) jobs.push(sb.from('supplement_logs').upsert(cleanRows(state.supplement_logs), {onConflict:'log_id'}));
       if(state.fitness_days.length) jobs.push(sb.from('fitness_days').upsert(cleanRows(state.fitness_days), {onConflict:'id'}));
+      if(state.sugar_days.length) jobs.push(sb.from('sugar_days').upsert(cleanRows(state.sugar_days), {onConflict:'id'}));
       if(state.meals.length) jobs.push(sb.from('meals').upsert(cleanRows(state.meals), {onConflict:'meal_id'}));
       if(state.assignments.length) jobs.push(sb.from('assignments').upsert(cleanRows(state.assignments), {onConflict:'assignment_id'}));
       const results = await Promise.all(jobs);
@@ -961,6 +974,17 @@
     }
     await saveState();
   }
+  function isSugarDay(dateStr){ return state.sugar_days.some(f=>f.date===dateStr); }
+  async function toggleSugarDay(dateStr){
+    const existing = state.sugar_days.find(f=>f.date===dateStr);
+    if(existing){
+      state.sugar_days = state.sugar_days.filter(f=>f.date!==dateStr);
+      await sb.from('sugar_days').delete().eq('id', existing.id);
+    }else{
+      state.sugar_days.push({id:uid('sugar'), date:dateStr});
+    }
+    await saveState();
+  }
   function isSuppTaken(suppId, dateStr){ return state.supplement_logs.some(l=>l.supplement_id===suppId && l.date===dateStr); }
   async function toggleSuppLog(suppId, dateStr){
     const idx = state.supplement_logs.findIndex(l=>l.supplement_id===suppId && l.date===dateStr);
@@ -978,9 +1002,14 @@
 
   function renderHealthBlock(){
     const gymDay = isFitnessDay(ovSelectedDate);
-    let html = `<div class="fitness-toggle-row" style="padding:0 20px 14px; display:flex; gap:10px;">
+    const sugarDay = isSugarDay(ovSelectedDate);
+    let html = `<div class="fitness-toggle-row" style="padding:0 20px 10px; display:flex; gap:10px;">
       <button class="fitness-btn${gymDay?' on':''}" id="fitnessOnBtn">健身</button>
       <button class="fitness-btn${!gymDay?' on':''}" id="fitnessOffBtn">不健身</button>
+    </div>`;
+    html += `<div class="fitness-toggle-row" style="padding:0 20px 14px; display:flex; gap:10px;">
+      <button class="fitness-btn sugar-btn${sugarDay?' on':''}" id="sugarOnBtn">控糖</button>
+      <button class="fitness-btn sugar-btn${!sugarDay?' on':''}" id="sugarOffBtn">没控糖</button>
     </div>`;
 
     html += `<div class="task-list" style="margin:0 20px 14px;">`;
@@ -1011,6 +1040,8 @@
     $('#ovHealth').innerHTML = html;
     $('#fitnessOnBtn').onclick = async ()=>{ if(!isFitnessDay(ovSelectedDate)){ await toggleFitnessDay(ovSelectedDate); renderOverview(); } };
     $('#fitnessOffBtn').onclick = async ()=>{ if(isFitnessDay(ovSelectedDate)){ await toggleFitnessDay(ovSelectedDate); renderOverview(); } };
+    $('#sugarOnBtn').onclick = async ()=>{ if(!isSugarDay(ovSelectedDate)){ await toggleSugarDay(ovSelectedDate); renderOverview(); } };
+    $('#sugarOffBtn').onclick = async ()=>{ if(isSugarDay(ovSelectedDate)){ await toggleSugarDay(ovSelectedDate); renderOverview(); } };
     document.querySelectorAll('#ovHealth .supp-check-row .t-check').forEach(el=>{
       el.onclick = async ()=>{ await toggleSuppLog(el.dataset.supp, ovSelectedDate); renderOverview(); };
     });
@@ -1063,6 +1094,7 @@
       const inMonth = d.getMonth()===m;
       const tasksToday = dayTasks(dateStr).filter(t=>isTaskDone(t.task_id, dateStr));
       const hasFitness = isFitnessDay(dateStr);
+      const hasSugar = isSugarDay(dateStr);
 
       const maxPills = 3;
       let pillsHtml = '', pillCount = 0;
@@ -1075,7 +1107,11 @@
         pillsHtml += `<div class="month-pill fit-pill">健身</div>`;
         pillCount++;
       }
-      const totalItems = tasksToday.length + (hasFitness?1:0);
+      if(hasSugar && pillCount<maxPills){
+        pillsHtml += `<div class="month-pill sugar-pill">控糖</div>`;
+        pillCount++;
+      }
+      const totalItems = tasksToday.length + (hasFitness?1:0) + (hasSugar?1:0);
       const moreCount = totalItems - pillCount;
 
       html += `<div class="month-cell${inMonth?'':' other-month'}${dateStr===todayStr?' is-today':''}${dateStr===ovSelectedDate?' is-selected':''}" data-date="${dateStr}">
@@ -1456,6 +1492,7 @@
     });
     }
     renderFitnessChart();
+    renderSugarChart();
   }
 
   function renderFitnessChart(){
@@ -1489,6 +1526,42 @@
       <div class="fc-stat-row">
         <div><div class="fc-num">${markedThisMonth}</div><div class="fc-label">本月健身天数</div></div>
         <div><div class="fc-num">${streak}</div><div class="fc-label">连续健身天数</div></div>
+      </div>
+      <div class="fc-grid">${cells}</div>
+    `;
+  }
+
+  function renderSugarChart(){
+    const now = new Date();
+    const y = now.getFullYear(), m = now.getMonth();
+    const todayStr = fmtDate(now);
+    const monthPrefix = `${y}-${String(m+1).padStart(2,'0')}`;
+    const markedThisMonth = state.sugar_days.filter(f=>f.date.startsWith(monthPrefix)).length;
+
+    let streak = 0;
+    let cursor = new Date(now);
+    while(true){
+      const ds = fmtDate(cursor);
+      if(isSugarDay(ds)){ streak++; cursor.setDate(cursor.getDate()-1); }
+      else break;
+    }
+
+    const firstOfMonth = new Date(y, m, 1);
+    const startOffset = (firstOfMonth.getDay()+6)%7;
+    const gridStart = new Date(y, m, 1 - startOffset);
+    let cells = ['一','二','三','四','五','六','日'].map(d=>`<div class="fc-weekday">${d}</div>`).join('');
+    for(let i=0;i<42;i++){
+      const d = new Date(gridStart); d.setDate(gridStart.getDate()+i);
+      const ds = fmtDate(d);
+      const inMonth = d.getMonth()===m;
+      const marked = isSugarDay(ds);
+      cells += `<div class="fc-cell${marked?' marked sugar-marked':''}${ds===todayStr?' is-today':''}${inMonth?'':' other-month'}">${d.getDate()}</div>`;
+    }
+
+    $('#sugarChartCard').innerHTML = `
+      <div class="fc-stat-row">
+        <div><div class="fc-num">${markedThisMonth}</div><div class="fc-label">本月控糖天数</div></div>
+        <div><div class="fc-num">${streak}</div><div class="fc-label">连续控糖天数</div></div>
       </div>
       <div class="fc-grid">${cells}</div>
     `;
@@ -1682,6 +1755,7 @@
   $('#exportSuppRow').onclick = ()=> download('supplements.csv', toCsv(state.supplements, ['supplement_id','name','schedule_type','notes']), 'text/csv');
   $('#exportSuppLogRow').onclick = ()=> download('supplement_logs.csv', toCsv(state.supplement_logs, ['log_id','supplement_id','date']), 'text/csv');
   $('#exportFitnessRow').onclick = ()=> download('fitness_days.csv', toCsv(state.fitness_days, ['id','date']), 'text/csv');
+  $('#exportSugarRow').onclick = ()=> download('sugar_days.csv', toCsv(state.sugar_days, ['id','date']), 'text/csv');
   $('#exportMealsRow').onclick = ()=> download('meals.csv', toCsv(state.meals, ['meal_id','date','slot','content']), 'text/csv');
 
   function seedRealCourses(){
