@@ -405,6 +405,7 @@
     <div class="group-label">账号</div>
     <div class="more-group">
       <div class="more-row"><span class="m-label" id="accountEmailLabel">已登录</span></div>
+      <div class="more-row export" id="setPasswordRow"><span class="m-label" style="color:var(--accent-deep);">设置/修改密码</span></div>
       <div class="more-row export" id="signOutRow"><span class="m-label" style="color:var(--danger);">退出登录</span></div>
     </div>
   </div>
@@ -676,6 +677,14 @@
   $('#signOutRow').onclick = async ()=>{
     if(!confirm('确定退出登录吗？')) return;
     await sb.auth.signOut();
+  };
+  $('#setPasswordRow').onclick = async ()=>{
+    const pw = prompt('给当前账号设置一个新密码（至少6位）：\n设置后，以后在任何设备上都可以用"邮箱+这个密码"登录，不用再发邮件。');
+    if(pw === null) return; // 用户取消
+    if(pw.length < 6){ toast('密码至少需要6位，没有保存'); return; }
+    const { error } = await sb.auth.updateUser({ password: pw });
+    if(error){ toast('设置失败：'+(error.message||'未知错误')); }
+    else{ toast('密码设置成功！其他设备现在可以用这个密码登录了'); }
   };
 
   // ================= CANVAS ICS IMPORT =================
@@ -1787,10 +1796,22 @@
     const cred = validateLoginInput(); if(!cred) return;
     const msgEl = $('#loginMsg');
     $('#loginSignUpBtn').disabled = true; $('#loginSignUpBtn').textContent = '注册中...';
-    const { error } = await sb.auth.signUp(cred);
+    const { data, error } = await sb.auth.signUp(cred);
     $('#loginSignUpBtn').disabled = false; $('#loginSignUpBtn').textContent = '注册';
-    if(error){ msgEl.textContent = '注册失败：'+error.message; msgEl.className='login-msg error'; }
-    else{ msgEl.textContent = '注册成功！去邮箱（'+cred.email+'）点确认链接激活账号，然后回来登录。'; msgEl.className='login-msg'; }
+    // Supabase对"邮箱已存在"的处理比较隐晦：可能返回一个看似成功但identities为空数组的假用户，
+    // 也可能返回一个message为空的error，都统一识别成"已注册过"，不直接显示原始报错对象
+    const alreadyRegistered = (data && data.user && Array.isArray(data.user.identities) && data.user.identities.length===0)
+      || (error && (!error.message || /already registered|already exists/i.test(error.message)));
+    if(alreadyRegistered){
+      msgEl.textContent = '这个邮箱已经注册过了，直接点"登录"就行，不用再注册一次。';
+      msgEl.className='login-msg error';
+    }else if(error){
+      msgEl.textContent = '注册失败：'+(error.message || '未知错误，请稍后重试');
+      msgEl.className='login-msg error';
+    }else{
+      msgEl.textContent = '注册成功！去邮箱（'+cred.email+'）点确认链接激活账号，然后回来登录。';
+      msgEl.className='login-msg';
+    }
   };
 
   async function bootApp(){
