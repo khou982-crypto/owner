@@ -227,7 +227,7 @@
   .detail-line b{ color:var(--ink); font-weight:600; }
 
   /* ---- fab ---- */
-  .fab-wrap{ position:fixed; left:0; right:0; bottom:88px; max-width:430px; margin:0 auto; pointer-events:none; z-index:30; height:0; }
+  .fab-wrap{ position:fixed; left:0; right:0; bottom:88px; max-width:430px; margin:0 auto; pointer-events:none; z-index:45; height:0; }
   .fab{ position:absolute; right:24px; bottom:0; width:56px; height:56px; border-radius:50%; background:var(--ink); color:#fff; border:none; font-size:26px; box-shadow:var(--shadow-float); display:flex; align-items:center; justify-content:center; cursor:pointer; pointer-events:auto; }
 
   /* ---- tab bar ---- */
@@ -367,6 +367,11 @@
     <div class="mgmt-list" id="taskListDaily"></div>
     <div class="section-head"><h2>一次性任务</h2></div>
     <div class="mgmt-list" id="taskListOnce"></div>
+    <div id="taskOnceHistoryToggle" style="display:none; align-items:center; gap:6px; margin:14px 20px 0; padding:6px 0; color:var(--ink-2); font-size:13px; cursor:pointer;">
+      <span id="taskOnceHistoryArrow" style="display:inline-block; transition:transform 0.2s;">›</span>
+      <span id="taskOnceHistoryLabel"></span>
+    </div>
+    <div class="mgmt-list" id="taskListOnceHistory" style="display:none;"></div>
   </div>
 
   <!-- ===== HEALTH (MANAGEMENT) ===== -->
@@ -397,6 +402,10 @@
     <div class="more-group">
       <div class="more-row export" id="icsImportRow"><span class="m-label" style="color:var(--accent-deep);">导入Canvas作业（.ics文件）</span><span class="chev">›</span></div>
       <input type="file" id="icsFileInput" accept=".ics" style="display:none;">
+    </div>
+    <div class="group-label">Gmail</div>
+    <div class="more-group">
+      <div class="more-row export" id="gmailPendingRow"><span class="m-label" style="color:var(--accent-deep);">Gmail 待确认</span><span class="m-tag" id="gmailPendingBadge" style="display:none;"></span><span class="chev">›</span></div>
     </div>
     <div class="group-label">数据</div>
     <div class="more-group">
@@ -537,6 +546,19 @@
     <div class="sheet-body">
       <div style="font-size:12px; color:var(--ink-2); margin-bottom:12px;" id="canvasPendingSummary"></div>
       <div id="canvasPendingList"></div>
+    </div>
+  </div>
+
+  <!-- ===== GMAIL PENDING SHEET ===== -->
+  <div class="sheet" id="gmailPendingSheet">
+    <div class="sheet-head">
+      <button class="sh-btn sh-cancel" id="gmailPendingClose">关闭</button>
+      <div class="sh-title">Gmail 待确认</div>
+      <button class="sh-btn sh-save" id="gmailPendingAcceptAll">全部接受</button>
+    </div>
+    <div class="sheet-body">
+      <div style="font-size:12px; color:var(--ink-2); margin-bottom:12px;" id="gmailPendingSummary"></div>
+      <div id="gmailPendingList"></div>
     </div>
   </div>
 
@@ -685,6 +707,7 @@
   function renderMore(){
     $('#soonModules').innerHTML = MODULES.map(m=>`<div class="more-row"><span class="m-label">${m.label}</span><span class="m-tag">开发中</span></div>`).join('');
     if(currentUser) $('#accountEmailLabel').textContent = currentUser.email;
+    refreshGmailPendingBadge();
   }
   $('#signOutRow').onclick = async ()=>{
     if(!confirm('确定退出登录吗？')) return;
@@ -852,6 +875,93 @@
     canvasPendingSheet.classList.remove('open'); backdrop.classList.remove('open');
   };
   $('#canvasPendingClose').onclick = ()=>{ canvasPendingSheet.classList.remove('open'); backdrop.classList.remove('open'); };
+
+  // ================= GMAIL PENDING QUEUE =================
+  const gmailPendingSheet = $('#gmailPendingSheet');
+  const GMAIL_ITEM_TYPE_LABEL = { task:'任务', assignment:'作业', course:'课程' };
+  let gmailPendingItems = [];
+
+  async function refreshGmailPendingBadge(){
+    if(!currentUser) return;
+    const { count } = await sb.from('pending_gmail_items').select('id', {count:'exact', head:true}).eq('status','pending');
+    const el = $('#gmailPendingBadge');
+    if(!el) return;
+    if(count){ el.textContent = `${count} 条待确认`; el.style.display = ''; }
+    else { el.textContent = ''; el.style.display = 'none'; }
+  }
+
+  async function openGmailPendingSheet(){
+    const { data, error } = await sb.from('pending_gmail_items').select('*').in('status',['pending','discarded']).order('created_at', {ascending:true});
+    if(error){ toast('加载 Gmail 待确认失败：'+(error.message||'未知错误')); return; }
+    gmailPendingItems = (data||[]).map(d=>({...d, uiStatus:d.status}));
+    renderGmailPendingList();
+    gmailPendingSheet.classList.add('open'); backdrop.classList.add('open');
+  }
+  function renderGmailPendingList(){
+    const pendingCount = gmailPendingItems.filter(i=>i.uiStatus==='pending').length;
+    $('#gmailPendingSummary').textContent = `共 ${gmailPendingItems.length} 条候选，${pendingCount} 条待你确认`;
+    const list = $('#gmailPendingList');
+    if(gmailPendingItems.length===0){
+      list.innerHTML = `<div style="padding:20px; text-align:center; color:var(--ink-2); font-size:13px;">没有待确认的候选</div>`;
+      return;
+    }
+    list.innerHTML = gmailPendingItems.map((item,idx)=>`
+      <div class="canvas-pending-row${item.uiStatus==='discarded'?' done':''}">
+        <div class="cp-title">${esc(item.title)}</div>
+        <div class="cp-meta">
+          <span class="chip course">${esc(GMAIL_ITEM_TYPE_LABEL[item.item_type]||item.item_type)}</span>
+          ${item.due_date?`<span class="chip mono">截止 ${esc(item.due_date)}</span>`:''}
+        </div>
+        <div style="font-size:12px; color:var(--ink-2); margin-top:4px;">来自：${esc(item.subject||'(无主题)')}${item.sender?`（${esc(item.sender)}）`:''}</div>
+        ${item.notes ? `<div style="font-size:12px; color:var(--ink-2); margin-top:4px;">${esc(item.notes)}</div>` : ''}
+        <div class="cp-actions">
+          ${item.uiStatus==='pending' ? `<button class="cp-discard" data-gdiscard="${idx}">不接受</button>` : ''}
+          <button class="cp-add" data-gadd="${idx}">接受</button>
+        </div>
+      </div>
+    `).join('');
+    list.querySelectorAll('[data-gadd]').forEach(btn=>{ btn.onclick = ()=> acceptOneGmailItem(+btn.dataset.gadd); });
+    list.querySelectorAll('[data-gdiscard]').forEach(btn=>{ btn.onclick = ()=> discardOneGmailItem(+btn.dataset.gdiscard); });
+  }
+  async function discardOneGmailItem(idx){
+    const item = gmailPendingItems[idx];
+    const { error } = await sb.from('pending_gmail_items').update({status:'discarded'}).eq('id', item.id);
+    if(error){ toast('操作失败：'+(error.message||'未知错误')); return; }
+    item.uiStatus = 'discarded';
+    renderGmailPendingList();
+    refreshGmailPendingBadge();
+  }
+  async function acceptOneGmailItem(idx){
+    const item = gmailPendingItems[idx];
+    state.tasks.push({
+      task_id: uid('task'), title:item.title,
+      category: item.item_type==='task' ? '' : '学业',
+      priority:'无', related_course_id:'', task_kind:'once', is_recurring:false,
+      due_date:item.due_date||'', due_time:'', repeat_days:[], repeat_until:'',
+      notes: [item.notes, item.subject?`来自邮件：${item.subject}`:''].filter(Boolean).join('\n')
+    });
+    const ok = await saveState();
+    if(!ok){ state.tasks.pop(); return; }
+    const { error } = await sb.from('pending_gmail_items').update({status:'accepted'}).eq('id', item.id);
+    if(error) toast('候选状态更新失败：'+(error.message||'未知错误'));
+    gmailPendingItems = gmailPendingItems.filter(i=>i.id!==item.id);
+    renderGmailPendingList();
+    renderAll();
+    refreshGmailPendingBadge();
+  }
+  $('#gmailPendingAcceptAll').onclick = async ()=>{
+    const pendingIds = gmailPendingItems.filter(i=>i.uiStatus==='pending').map(i=>i.id);
+    for(const id of pendingIds){
+      const idx = gmailPendingItems.findIndex(i=>i.id===id);
+      if(idx>-1) await acceptOneGmailItem(idx);
+    }
+    toast('已全部接受');
+  };
+  $('#gmailPendingClose').onclick = ()=>{
+    gmailPendingSheet.classList.remove('open'); backdrop.classList.remove('open');
+    refreshGmailPendingBadge();
+  };
+  $('#gmailPendingRow').onclick = openGmailPendingSheet;
 
 
   // ================= OVERVIEW (DAY VIEW) =================
@@ -1316,14 +1426,34 @@
     if(t.task_kind) return t.task_kind;
     return t.is_recurring ? 'daily' : 'once'; // 兼容旧数据没有task_kind字段的情况
   }
+  let taskOnceHistoryOpen = false;
   function renderTaskMgmt(){
     $('#taskStat').textContent = `共 ${state.tasks.length} 个任务`;
     const longterm = state.tasks.filter(t=>taskKindOf(t)==='longterm');
     const daily = state.tasks.filter(t=>taskKindOf(t)==='daily');
     const once = state.tasks.filter(t=>taskKindOf(t)==='once');
+    // 一次性任务在到期那天被勾完成后，归到下面折叠的"历史任务"里，不继续留在主列表里占地方
+    const onceActive = once.filter(t=> !isTaskDone(t.task_id, t.due_date));
+    const onceHistory = once.filter(t=> isTaskDone(t.task_id, t.due_date));
     renderTaskGroup($('#taskListLongterm'), longterm, '还没有长期任务，点右下角「+」新建一个');
     renderTaskGroup($('#taskListDaily'), daily, '还没有日常任务，点右下角「+」新建一个');
-    renderTaskGroup($('#taskListOnce'), once, '还没有一次性任务，点右下角「+」新建一个');
+    renderTaskGroup($('#taskListOnce'), onceActive, '还没有一次性任务，点右下角「+」新建一个');
+
+    const histToggle = $('#taskOnceHistoryToggle');
+    const histList = $('#taskListOnceHistory');
+    if(onceHistory.length){
+      histToggle.style.display = 'flex';
+      $('#taskOnceHistoryLabel').textContent = `历史任务（${onceHistory.length}）`;
+      $('#taskOnceHistoryArrow').style.transform = taskOnceHistoryOpen ? 'rotate(90deg)' : '';
+      histList.style.display = taskOnceHistoryOpen ? '' : 'none';
+      renderTaskGroup(histList, onceHistory, '');
+      histToggle.onclick = ()=>{ taskOnceHistoryOpen = !taskOnceHistoryOpen; renderTaskMgmt(); };
+    }else{
+      histToggle.style.display = 'none';
+      histList.style.display = 'none';
+      histList.innerHTML = '';
+    }
+    if(activeTab==='tasks') $('#fabAdd').style.display = expandedTaskId ? 'none' : 'flex';
   }
 
   let editingTaskId = null;
