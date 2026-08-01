@@ -215,6 +215,14 @@
   .session-chip .s-loc{ flex:1; font-family:-apple-system,"SF Pro Text",sans-serif; }
   .session-chip .s-del{ color:var(--danger); border:none; background:none; font-size:16px; padding:0 2px; cursor:pointer; }
   .link-btn{ font-size:12.5px; color:var(--accent-deep); font-weight:600; background:none; border:none; padding:6px 0; cursor:pointer; }
+  .more-menu-wrap{ position:relative; }
+  .more-btn{ background:none; border:none; color:var(--ink-2); font-size:17px; letter-spacing:1px; padding:4px 8px; line-height:1; cursor:pointer; border-radius:8px; }
+  .more-btn:active{ background:var(--bg-grouped); }
+  .more-menu{ display:none; position:absolute; right:0; top:calc(100% + 4px); background:var(--surface); border-radius:12px; box-shadow:var(--shadow-card); border:1px solid var(--hairline); overflow:hidden; z-index:15; min-width:104px; }
+  .more-menu.open{ display:block; }
+  .more-menu button{ display:block; width:100%; text-align:left; padding:10px 14px; font-size:12.5px; font-weight:600; background:none; border:none; cursor:pointer; color:var(--ink); white-space:nowrap; }
+  .more-menu button + button{ border-top:1px solid var(--hairline); }
+  .more-menu button.danger{ color:var(--danger); }
   .cd-actions{ display:flex; gap:10px; margin-top:10px; }
   .cd-actions button{ flex:1; padding:9px 0; border-radius:9px; font-size:13px; font-weight:600; border:none; cursor:pointer; }
   .cd-actions .del-btn{ background:var(--danger-tint); color:var(--danger); }
@@ -578,6 +586,18 @@
   function weekdayOf(dateStr){ const d = new Date(dateStr+'T00:00:00'); return DAYS[(d.getDay()+6)%7]; }
   function addDays(dateStr, n){ const d = new Date(dateStr+'T00:00:00'); d.setDate(d.getDate()+n); return fmtDate(d); }
   function todayIndex(){ const d = new Date().getDay(); return (d+6)%7; }
+  function wireMoreMenus(root){
+    root.querySelectorAll('[data-more-toggle]').forEach(btn=>{
+      btn.onclick = (e)=>{ e.stopPropagation();
+        const menu = root.querySelector(`[data-more-menu="${btn.dataset.moreToggle}"]`);
+        if(!menu) return;
+        const wasOpen = menu.classList.contains('open');
+        document.querySelectorAll('.more-menu.open').forEach(m=>m.classList.remove('open'));
+        if(!wasOpen) menu.classList.add('open');
+      };
+    });
+  }
+  document.addEventListener('click', ()=>{ document.querySelectorAll('.more-menu.open').forEach(m=>m.classList.remove('open')); });
   function uid(p){ return p+'_'+Math.random().toString(36).slice(2,9); }
   function esc(s){ return (s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
   function timeMin(t){ if(!t) return 0; const [h,m]=t.split(':').map(Number); return h*60+m; }
@@ -1151,7 +1171,15 @@
     let html = '';
     if(course.subtitle_folder_path) html += `<div class="cd-note">字幕文件夹：${esc(course.subtitle_folder_path)}</div>`;
 
-    html += `<div class="cd-section-head"><span>上课时段</span><button class="link-btn" data-toggle-edit="${course.course_id}">${isEditing?'完成':'修改'}</button></div>`;
+    html += `<div class="cd-section-head"><span>上课时段</span>
+      <div class="more-menu-wrap">
+        <button class="more-btn" data-more-toggle="crs-${course.course_id}">⋮</button>
+        <div class="more-menu" data-more-menu="crs-${course.course_id}">
+          <button data-toggle-edit="${course.course_id}">${isEditing?'完成':'修改'}</button>
+          <button class="danger" data-del-course="${course.course_id}">删除</button>
+        </div>
+      </div>
+    </div>`;
 
     if(!isEditing){
       if(sessions.length===0){
@@ -1192,10 +1220,10 @@
       });
     }
 
-    html += `<div style="display:flex; justify-content:flex-end; margin-top:14px;"><button class="s-del" data-del-course="${course.course_id}" style="font-size:20px;">×</button></div>`;
     return html;
   }
   function wireCourseDetail(detail, course){
+    wireMoreMenus(detail);
     const toggleBtn = detail.querySelector('[data-toggle-edit]');
     if(toggleBtn) toggleBtn.onclick = (e)=>{ e.stopPropagation();
       editingSessionsCourseId = editingSessionsCourseId===course.course_id ? null : course.course_id;
@@ -1315,7 +1343,15 @@
       detail.className = 'mgmt-detail' + (expandedTaskId===t.task_id?' open':'');
       if(expandedTaskId===t.task_id){
         const isEditing = editingTaskId===t.task_id;
-        let html = `<div class="cd-section-head"><span>详情</span><button class="link-btn" data-toggle-task-edit="${t.task_id}">${isEditing?'完成':'修改'}</button></div>`;
+        let html = `<div class="cd-section-head"><span>详情</span>
+          <div class="more-menu-wrap">
+            <button class="more-btn" data-more-toggle="tsk-${t.task_id}">⋮</button>
+            <div class="more-menu" data-more-menu="tsk-${t.task_id}">
+              <button data-toggle-task-edit="${t.task_id}">${isEditing?'完成':'修改'}</button>
+              <button class="danger" data-del-task="${t.task_id}">删除</button>
+            </div>
+          </div>
+        </div>`;
         html += `<div class="session-view-row" style="align-items:center;"><span>移到</span>
           <select class="ted-move-kind" data-task="${t.task_id}">
             <option value="longterm" ${kind==='longterm'?'selected':''}>长期任务</option>
@@ -1342,9 +1378,9 @@
           }
           html += `<div class="session-chip"><input type="text" class="ted-notes" placeholder="备注" value="${esc(t.notes)}" style="flex:1; font-family:-apple-system,sans-serif;"></div>`;
         }
-        html += `<div style="display:flex; justify-content:flex-end; margin-top:12px;"><button class="s-del" data-del-task="${t.task_id}" style="font-size:20px;">×</button></div>`;
         detail.innerHTML = html;
         list.appendChild(detail);
+        wireMoreMenus(detail);
 
         detail.querySelector('[data-toggle-task-edit]').onclick = (e)=>{ e.stopPropagation();
           editingTaskId = isEditing ? null : t.task_id; renderTaskMgmt();
