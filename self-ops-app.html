@@ -334,7 +334,6 @@
       </div>
       <div class="month-grid" id="monthGrid"></div>
       <div style="padding:0 20px; display:flex; gap:12px; font-size:11px; color:var(--ink-2); flex-wrap:wrap;">
-        <div style="display:flex; align-items:center; gap:5px;"><span class="month-pill" style="background:var(--accent-deep); padding:2px 6px;">课程</span>颜色对应课程本身</div>
         <div style="display:flex; align-items:center; gap:5px;"><span class="month-pill task-pill" style="padding:2px 6px;">任务</span></div>
         <div style="display:flex; align-items:center; gap:5px;"><span class="month-pill fit-pill" style="padding:2px 6px;">健身</span></div>
       </div>
@@ -1062,17 +1061,11 @@
       const dateStr = fmtDate(d);
       const wd = DAYS[(d.getDay()+6)%7];
       const inMonth = d.getMonth()===m;
-      const courses = coursesOnDate(dateStr, wd);
       const tasksToday = dayTasks(dateStr).filter(t=>isTaskDone(t.task_id, dateStr));
       const hasFitness = isFitnessDay(dateStr);
 
       const maxPills = 3;
       let pillsHtml = '', pillCount = 0;
-      for(const c of courses){
-        if(pillCount>=maxPills) break;
-        pillsHtml += `<div class="month-pill" style="background:${c.color_tag};">${esc(c.course_name)}</div>`;
-        pillCount++;
-      }
       for(const t of tasksToday){
         if(pillCount>=maxPills) break;
         pillsHtml += `<div class="month-pill task-pill">${esc(t.title)}</div>`;
@@ -1082,7 +1075,7 @@
         pillsHtml += `<div class="month-pill fit-pill">健身</div>`;
         pillCount++;
       }
-      const totalItems = courses.length + tasksToday.length + (hasFitness?1:0);
+      const totalItems = tasksToday.length + (hasFitness?1:0);
       const moreCount = totalItems - pillCount;
 
       html += `<div class="month-cell${inMonth?'':' other-month'}${dateStr===todayStr?' is-today':''}${dateStr===ovSelectedDate?' is-selected':''}" data-date="${dateStr}">
