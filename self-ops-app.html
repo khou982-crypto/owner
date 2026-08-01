@@ -407,6 +407,13 @@
     <div class="more-group">
       <div class="more-row export" id="gmailPendingRow"><span class="m-label" style="color:var(--accent-deep);">Gmail 待确认</span><span class="m-tag" id="gmailPendingBadge" style="display:none;"></span><span class="chev">›</span></div>
     </div>
+    <div class="group-label" style="display:flex; align-items:center; justify-content:space-between;">
+      <span id="birthdaySectionToggle" style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+        <span id="birthdaySectionArrow" style="display:inline-block; transition:transform 0.2s;">›</span>生日
+      </span>
+      <span id="addBirthdayRow" style="cursor:pointer; font-size:16px; color:var(--ink-2); font-weight:600;">＋</span>
+    </div>
+    <div class="more-group" id="birthdayMgmtGroup" style="display:none;"></div>
     <div class="group-label">数据</div>
     <div class="more-group">
       <div class="more-row export" id="exportJsonRow"><span class="m-label">导出 JSON（全部数据）</span><span class="chev">›</span></div>
@@ -562,6 +569,31 @@
     </div>
   </div>
 
+  <!-- ===== BIRTHDAY SHEET ===== -->
+  <div class="sheet" id="birthdaySheet">
+    <div class="sheet-head">
+      <button class="sh-btn sh-cancel" id="birthdaySheetCancel">取消</button>
+      <div class="sh-title" id="birthdaySheetTitle">新建生日</div>
+      <button class="sh-btn sh-save" id="birthdaySheetSave">保存</button>
+    </div>
+    <div class="sheet-body">
+      <div class="f-group"><div class="f-row"><label>姓名</label><input id="f_b_name" placeholder="如：鑫鑫"></div></div>
+      <div class="f-group">
+        <div class="f-row"><label>日历类型</label>
+          <select id="f_b_calendar">
+            <option value="solar">公历</option>
+            <option value="lunar">农历</option>
+          </select>
+        </div>
+        <div class="f-row"><label>月</label><input id="f_b_month" type="number" min="1" max="12" placeholder="1-12"></div>
+        <div class="f-row"><label>日</label><input id="f_b_day" type="number" min="1" max="30" placeholder="1-30"></div>
+      </div>
+      <div class="f-group"><div class="f-row"><label>提前几天提醒</label><input id="f_b_remind" type="number" min="0" value="3"></div></div>
+      <div class="f-group"><div class="f-row"><label>备注（可留空）</label><textarea id="f_b_note" placeholder="比如礼物想法"></textarea></div></div>
+      <div class="f-group"><button id="birthdaySheetDelete" style="display:none; width:100%; padding:10px; border-radius:10px; background:var(--danger-tint); color:var(--danger); border:none; font-size:13.5px; font-weight:600; cursor:pointer;">删除这条生日</button></div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 </div>
 
@@ -587,7 +619,7 @@
     {key:'more', label:'更多', icon:['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z','M8.3 12h.01','M12 12h.01','M15.7 12h.01'], soon:false},
   ];
 
-  let state = { courses: [], sessions: [], tasks: [], completions: [], supplements: [], supplement_logs: [], meals: [], assignments: [], fitness_days: [], sugar_days: [] };
+  let state = { courses: [], sessions: [], tasks: [], completions: [], supplements: [], supplement_logs: [], meals: [], assignments: [], fitness_days: [], sugar_days: [], birthdays: [] };
   let selectedColor = COLORS[0];
   let selectedPriority = '无';
   let taskType = 'once';
@@ -621,7 +653,7 @@
   async function loadState(){
     if(!currentUser) return;
     try{
-      const [c,s,t,cp,sp,sl,fd,ml,ag,sd] = await Promise.all([
+      const [c,s,t,cp,sp,sl,fd,ml,ag,sd,bd] = await Promise.all([
         sb.from('courses').select('*'),
         sb.from('course_sessions').select('*'),
         sb.from('tasks').select('*'),
@@ -632,6 +664,7 @@
         sb.from('meals').select('*'),
         sb.from('assignments').select('*'),
         sb.from('sugar_days').select('*'),
+        sb.from('birthdays').select('*'),
       ]);
       state.courses = c.data || [];
       state.sessions = s.data || [];
@@ -643,6 +676,7 @@
       state.sugar_days = sd.data || [];
       state.meals = ml.data || [];
       state.assignments = ag.data || [];
+      state.birthdays = bd.data || [];
     }catch(e){ console.error(e); toast('数据加载失败，请检查网络后刷新'); }
   }
   // 数据库里date类型的字段不接受空字符串，必须转成null，否则整批写入会被拒绝
@@ -672,6 +706,7 @@
       if(state.sugar_days.length) jobs.push(sb.from('sugar_days').upsert(cleanRows(state.sugar_days), {onConflict:'id'}));
       if(state.meals.length) jobs.push(sb.from('meals').upsert(cleanRows(state.meals), {onConflict:'meal_id'}));
       if(state.assignments.length) jobs.push(sb.from('assignments').upsert(cleanRows(state.assignments), {onConflict:'assignment_id'}));
+      if(state.birthdays.length) jobs.push(sb.from('birthdays').upsert(cleanRows(state.birthdays), {onConflict:'id'}));
       const results = await Promise.all(jobs);
       const failed = results.find(r=>r.error);
       if(failed) throw failed.error;
@@ -708,6 +743,7 @@
     $('#soonModules').innerHTML = MODULES.map(m=>`<div class="more-row"><span class="m-label">${m.label}</span><span class="m-tag">开发中</span></div>`).join('');
     if(currentUser) $('#accountEmailLabel').textContent = currentUser.email;
     refreshGmailPendingBadge();
+    renderBirthdayMgmt();
   }
   $('#signOutRow').onclick = async ()=>{
     if(!confirm('确定退出登录吗？')) return;
@@ -963,6 +999,164 @@
   };
   $('#gmailPendingRow').onclick = openGmailPendingSheet;
 
+  // ================= BIRTHDAYS =================
+  const birthdaySheet = $('#birthdaySheet');
+  let editingBirthdayId = null;
+  function openBirthdaySheet(existing){
+    editingBirthdayId = existing ? existing.id : null;
+    $('#birthdaySheetTitle').textContent = existing ? '编辑生日' : '新建生日';
+    $('#f_b_name').value = existing ? existing.name : '';
+    $('#f_b_calendar').value = existing ? existing.calendar_type : 'solar';
+    $('#f_b_month').value = existing ? existing.month : '';
+    $('#f_b_day').value = existing ? existing.day : '';
+    $('#f_b_remind').value = existing ? existing.remind_days_before : 3;
+    $('#f_b_note').value = existing ? (existing.note||'') : '';
+    $('#birthdaySheetDelete').style.display = existing ? 'block' : 'none';
+    birthdaySheet.classList.add('open'); backdrop.classList.add('open');
+  }
+  function closeBirthdaySheet(){ birthdaySheet.classList.remove('open'); backdrop.classList.remove('open'); }
+  $('#addBirthdayRow').onclick = (e)=>{ e.stopPropagation(); openBirthdaySheet(null); };
+  let birthdayMgmtOpen = false;
+  $('#birthdaySectionToggle').onclick = ()=>{ birthdayMgmtOpen = !birthdayMgmtOpen; renderBirthdayMgmt(); };
+  $('#birthdaySheetCancel').onclick = closeBirthdaySheet;
+  $('#birthdaySheetSave').onclick = async ()=>{
+    const name = $('#f_b_name').value.trim();
+    const month = parseInt($('#f_b_month').value, 10);
+    const day = parseInt($('#f_b_day').value, 10);
+    if(!name){ toast('请填姓名'); return; }
+    if(!month || month<1 || month>12){ toast('月份要在1-12之间'); return; }
+    if(!day || day<1 || day>30){ toast('日期要在1-30之间'); return; }
+    const payload = {
+      name, calendar_type: $('#f_b_calendar').value, month, day,
+      remind_days_before: parseInt($('#f_b_remind').value, 10) || 0,
+      note: $('#f_b_note').value.trim()
+    };
+    if(editingBirthdayId){
+      const b = state.birthdays.find(x=>x.id===editingBirthdayId);
+      if(b) Object.assign(b, payload);
+    }else{
+      state.birthdays.push({ id: uid('bday'), ...payload });
+    }
+    const ok = await saveState();
+    if(!ok) return;
+    closeBirthdaySheet();
+    renderBirthdayMgmt();
+    renderOverview();
+  };
+  $('#birthdaySheetDelete').onclick = async ()=>{
+    if(!editingBirthdayId) return;
+    const b = state.birthdays.find(x=>x.id===editingBirthdayId);
+    if(!confirm(`确定删除「${b?b.name:''}」这条生日吗？`)) return;
+    state.birthdays = state.birthdays.filter(x=>x.id!==editingBirthdayId);
+    await sb.from('birthdays').delete().eq('id', editingBirthdayId);
+    closeBirthdaySheet();
+    renderBirthdayMgmt();
+    renderOverview();
+  };
+  function renderBirthdayMgmt(){
+    const wrap = $('#birthdayMgmtGroup');
+    if(!wrap) return;
+    wrap.style.display = birthdayMgmtOpen ? '' : 'none';
+    const arrow = $('#birthdaySectionArrow');
+    if(arrow) arrow.style.transform = birthdayMgmtOpen ? 'rotate(90deg)' : '';
+    if(state.birthdays.length===0){
+      wrap.innerHTML = `<div class="more-row"><span class="m-label" style="color:var(--ink-2);">还没有添加生日</span></div>`;
+      return;
+    }
+    wrap.innerHTML = state.birthdays.map(b=>{
+      const dateLabel = (b.calendar_type==='lunar'?'农历':'公历') + `${b.month}月${b.day}日`;
+      return `<div class="more-row export" data-edit-bday="${b.id}">
+        <span class="m-label">${esc(b.name)} · ${dateLabel}</span>
+        <button data-del-bday-quick="${b.id}" title="删除" style="border:none; background:none; color:var(--ink-2); font-size:17px; line-height:1; cursor:pointer; padding:2px 6px;">×</button>
+      </div>`;
+    }).join('');
+    wrap.querySelectorAll('[data-edit-bday]').forEach(row=>{
+      row.onclick = ()=>{
+        const b = state.birthdays.find(x=>x.id===row.dataset.editBday);
+        if(b) openBirthdaySheet(b);
+      };
+    });
+    wrap.querySelectorAll('[data-del-bday-quick]').forEach(btn=>{
+      btn.onclick = async (e)=>{
+        e.stopPropagation();
+        const id = btn.dataset.delBdayQuick;
+        const b = state.birthdays.find(x=>x.id===id);
+        if(!confirm(`确定删除「${b?b.name:''}」这条生日吗？`)) return;
+        state.birthdays = state.birthdays.filter(x=>x.id!==id);
+        await sb.from('birthdays').delete().eq('id', id);
+        renderBirthdayMgmt();
+        renderOverview();
+      };
+    });
+  }
+
+  // ================= LUNAR CALENDAR (农历换算，1900-2050) =================
+  // 数据来源：通用的农历数据表算法，每个数字编码某年闰月月份+12个月大小月信息。
+  // 已用 2025/2026/2020 年春节的公历日期核对过换算结果，均准确。
+  const LUNAR_INFO = [
+    0x04bd8,0x04ae0,0x0a570,0x054d5,0x0d260,0x0d950,0x16554,0x056a0,0x09ad0,0x055d2,
+    0x04ae0,0x0a5b6,0x0a4d0,0x0d250,0x1d255,0x0b540,0x0d6a0,0x0ada2,0x095b0,0x14977,
+    0x04970,0x0a4b0,0x0b4b5,0x06a50,0x06d40,0x1ab54,0x02b60,0x09570,0x052f2,0x04970,
+    0x06566,0x0d4a0,0x0ea50,0x06e95,0x05ad0,0x02b60,0x186e3,0x092e0,0x1c8d7,0x0c950,
+    0x0d4a0,0x1d8a6,0x0b550,0x056a0,0x1a5b4,0x025d0,0x092d0,0x0d2b2,0x0a950,0x0b557,
+    0x06ca0,0x0b550,0x15355,0x04da0,0x0a5b0,0x14573,0x052b0,0x0a9a8,0x0e950,0x06aa0,
+    0x0aea6,0x0ab50,0x04b60,0x0aae4,0x0a570,0x05260,0x0f263,0x0d950,0x05b57,0x056a0,
+    0x096d0,0x04dd5,0x04ad0,0x0a4d0,0x0d4d4,0x0d250,0x0d558,0x0b540,0x0b5a0,0x195a6,
+    0x095b0,0x049b0,0x0a974,0x0a4b0,0x0b27a,0x06a50,0x06d40,0x0af46,0x0ab60,0x09570,
+    0x04af5,0x04970,0x064b0,0x074a3,0x0ea50,0x06b58,0x055c0,0x0ab60,0x096d5,0x092e0,
+    0x0c960,0x0d954,0x0d4a0,0x0da50,0x07552,0x056a0,0x0abb7,0x025d0,0x092d0,0x0cab5,
+    0x0a950,0x0b4a0,0x0baa4,0x0ad50,0x055d9,0x04ba0,0x0a5b0,0x15176,0x052b0,0x0a930,
+    0x07954,0x06aa0,0x0ad50,0x05b52,0x04b60,0x0a6e6,0x0a4e0,0x0d260,0x0ea65,0x0d530,
+    0x05aa0,0x076a3,0x096d0,0x04afb,0x04ad0,0x0a4d0,0x1d0b6,0x0d250,0x0d520,0x0dd45,
+    0x0b5a0,0x056d0,0x055b2,0x049b0,0x0a577,0x0a4b0,0x0aa50,0x1b255,0x06d20,0x0ada0,
+    0x14b63
+  ];
+  const LUNAR_BASE_YEAR = 1900;
+  function lunarLeapMonth(y){ return LUNAR_INFO[y-LUNAR_BASE_YEAR] & 0xf; }
+  function lunarLeapDays(y){ return lunarLeapMonth(y) ? ((LUNAR_INFO[y-LUNAR_BASE_YEAR] & 0x10000) ? 30 : 29) : 0; }
+  function lunarMonthDays(y,m){ return (LUNAR_INFO[y-LUNAR_BASE_YEAR] & (0x10000 >> m)) ? 30 : 29; }
+  function lunarYearDays(y){
+    let sum = 348;
+    for(let i=0x8000; i>0x8; i>>=1) sum += (LUNAR_INFO[y-LUNAR_BASE_YEAR] & i) ? 1 : 0;
+    return sum + lunarLeapDays(y);
+  }
+  // 用 UTC 做整数天累加，避免新西兰夏令时切换时本地时间加一天变成加23/25小时导致日期算错
+  function lunarToSolarDate(lunarYear, lunarMonth, lunarDay){
+    lunarYear = Math.max(LUNAR_BASE_YEAR, Math.min(LUNAR_BASE_YEAR+LUNAR_INFO.length-1, lunarYear));
+    const day = Math.min(lunarDay, lunarMonthDays(lunarYear, lunarMonth));
+    let offset = 0;
+    for(let y=LUNAR_BASE_YEAR; y<lunarYear; y++) offset += lunarYearDays(y);
+    const leap = lunarLeapMonth(lunarYear);
+    for(let m=1; m<lunarMonth; m++){
+      offset += lunarMonthDays(lunarYear, m);
+      if(leap===m) offset += lunarLeapDays(lunarYear);
+    }
+    offset += day - 1;
+    const base = Date.UTC(LUNAR_BASE_YEAR, 0, 31);
+    const result = new Date(base + offset*86400000);
+    return `${result.getUTCFullYear()}-${String(result.getUTCMonth()+1).padStart(2,'0')}-${String(result.getUTCDate()).padStart(2,'0')}`;
+  }
+  function solarDateForYear(month, day, year){
+    const isLeapGregorian = (y)=> (y%4===0 && y%100!==0) || y%400===0;
+    const d = (month===2 && day===29 && !isLeapGregorian(year)) ? 28 : day;
+    return fmtDate(new Date(year, month-1, d));
+  }
+  function birthdayOccurrence(b, year){
+    return b.calendar_type==='lunar' ? lunarToSolarDate(year, b.month, b.day) : solarDateForYear(b.month, b.day, year);
+  }
+  function daysBetweenDates(a,b){ return Math.round((new Date(b+'T00:00:00') - new Date(a+'T00:00:00'))/86400000); }
+  // 判断某个生日在 dateStr 这天是否该出现在提醒里（提前 remind_days_before 天开始，到当天为止）
+  function birthdayReminderInfo(b, dateStr){
+    const year = parseInt(dateStr.slice(0,4),10);
+    for(const y of [year-1, year, year+1]){
+      const occur = birthdayOccurrence(b, y);
+      const windowStart = addDays(occur, -(b.remind_days_before||0));
+      if(dateStr >= windowStart && dateStr <= occur){
+        return { occurDate: occur, daysUntil: daysBetweenDates(dateStr, occur) };
+      }
+    }
+    return null;
+  }
 
   // ================= OVERVIEW (DAY VIEW) =================
   function renderSummaryCard(){
@@ -1042,10 +1236,25 @@
     }
 
     const tWrap = $('#ovTasks');
-    if(tasks.length===0){
+    const birthdayReminders = state.birthdays
+      .map(b=>({ b, info: birthdayReminderInfo(b, ovSelectedDate) }))
+      .filter(x=>x.info);
+    if(tasks.length===0 && birthdayReminders.length===0){
       tWrap.innerHTML = `<div class="empty-block">这天没有任务</div>`;
     }else{
-      tWrap.innerHTML = `<div class="task-list">` + tasks.map(t=>{
+      const birthdayRowsHtml = birthdayReminders.map(({b,info})=>{
+        let chips = `<span class="chip course">${info.daysUntil===0?'今天':'还有'+info.daysUntil+'天'}</span>`;
+        if(b.calendar_type==='lunar') chips += `<span class="chip">农历${b.month}月${b.day}日</span>`;
+        if(b.note) chips += `<span class="chip">${esc(b.note)}</span>`;
+        return `<div class="task-row" data-birthday="${b.id}">
+          <div style="width:21px; height:21px; border-radius:50%; background:var(--accent-tint); display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0; margin-top:1px;">🎂</div>
+          <div class="t-body">
+            <div class="t-title">${esc(b.name)} 生日</div>
+            <div class="t-meta">${chips}</div>
+          </div>
+        </div>`;
+      }).join('');
+      const taskRowsHtml = tasks.map(t=>{
         const done = isTaskDone(t.task_id, ovSelectedDate);
         const course = state.courses.find(c=>c.course_id===t.related_course_id);
         let chips = '';
@@ -1061,12 +1270,21 @@
             <div class="t-meta">${chips}</div>
           </div>
         </div>`;
-      }).join('') + `</div>`;
+      }).join('');
+      tWrap.innerHTML = `<div class="task-list">` + birthdayRowsHtml + taskRowsHtml + `</div>`;
       tWrap.querySelectorAll('.t-check').forEach(el=>{
         el.onclick = async ()=>{
           const tid = el.dataset.task;
           await toggleCompletion(tid, ovSelectedDate);
           renderOverview();
+        };
+      });
+      tWrap.querySelectorAll('[data-birthday]').forEach(el=>{
+        el.onclick = ()=>{
+          const b = state.birthdays.find(x=>x.id===el.dataset.birthday);
+          if(!b) return;
+          const info = birthdayReminderInfo(b, ovSelectedDate);
+          toast(`${b.name} 生日：${info.occurDate}${info.daysUntil===0?'（今天）':`（还有${info.daysUntil}天）`}`);
         };
       });
     }
