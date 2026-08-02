@@ -330,7 +330,7 @@
     }
     .sheet.open{ transform:translate(-50%,-50%) scale(1); opacity:1; pointer-events:auto; }
 
-    /* 总览页左右分栏：左边计划（本周课程+长期任务），右边执行（现有的当天视图原样不动） */
+    /* 总览页左右分栏：左边计划（本周课程），右边执行（现有的当天视图原样不动） */
     .ov-plan-col{ display:block; }
     #ovDayMode{ display:grid; grid-template-columns:1fr 1.3fr; gap:8px; align-items:start; }
     #ovDayMode .ov-plan-col, #ovDayMode .ov-exec-col{ min-width:0; }
@@ -425,9 +425,7 @@
       <h1>任务管理</h1>
       <div class="sub" id="taskStat"></div>
     </div>
-    <div class="section-head" style="padding-top:6px;"><h2>长期任务</h2></div>
-    <div class="mgmt-list" id="taskListLongterm"></div>
-    <div class="section-head"><h2>日常任务</h2></div>
+    <div class="section-head" style="padding-top:6px;"><h2>日常任务</h2></div>
     <div class="mgmt-list" id="taskListDaily"></div>
     <div class="section-head"><h2>一次性任务</h2></div>
     <div class="mgmt-list" id="taskListOnce"></div>
@@ -583,7 +581,6 @@
       <div class="f-group">
         <div class="f-row"><label>任务类型</label>
           <div class="segmented" id="typeSegment">
-            <button data-type="longterm">长期任务</button>
             <button data-type="daily">日常任务</button>
             <button data-type="once" class="sel">一次性任务</button>
           </div>
@@ -1661,7 +1658,7 @@
     renderOverviewPlanColumn();
   }
 
-  // 桌面端总览页左栏"计划"：本周课程 + 长期任务，只在桌面分栏布局里显示，移动端不渲染这块内容也没关系（反正CSS也隐藏了）
+  // 桌面端总览页左栏"计划"：本周课程，只在桌面分栏布局里显示，移动端不渲染这块内容也没关系（反正CSS也隐藏了）
   function renderOverviewPlanColumn(){
     const col = $('#ovPlanCol');
     if(!col) return;
@@ -1685,33 +1682,21 @@
         <div class="chev">›</div>
       </div>`;
       if(isOpen){
-        row += `<div class="mgmt-detail open">` + sessions.map(s=>{
+        row += `<div class="mgmt-detail open" style="padding-top:10px;"><div class="timeline" style="padding:0;">` + sessions.map(s=>{
           const c = state.courses.find(c=>c.course_id===s.course_id);
           const loc = s.location || (c && c.default_location) || '';
-          return `<div class="session-view-row">
-            <span class="mono">${esc(s.start_time)}–${esc(s.end_time)}</span>
-            <span class="sv-loc">${esc(c?c.course_name:'')}${loc?' · '+esc(loc):''}</span>
+          return `<div class="tl-item">
+            <div class="tl-time mono">${esc(s.start_time)}<br>${esc(s.end_time)}</div>
+            <div class="tl-card" style="border-left-color:${c?c.color_tag:'var(--accent)'};">
+              <div class="c-name">${esc(c?c.course_name:'')}</div>
+              ${loc ? `<div class="c-meta">${esc(loc)}</div>` : ''}
+            </div>
           </div>`;
-        }).join('') + `</div>`;
+        }).join('') + `</div></div>`;
       }
       return row;
     }).filter(Boolean).join('');
     html += weekRows ? `<div class="mgmt-list">${weekRows}</div>` : `<div class="empty-block">这周没有课</div>`;
-
-    html += `<div class="section-head"><h2>长期任务</h2></div>`;
-    const longterm = state.tasks.filter(t=>taskKindOf(t)==='longterm');
-    if(longterm.length===0){
-      html += `<div class="empty-block">还没有长期任务</div>`;
-    }else{
-      html += `<div class="mgmt-list">` + longterm.map(t=>`
-        <div class="mgmt-row" style="cursor:default;">
-          <div class="c-body">
-            <div class="c-title">${esc(t.title)}</div>
-            ${t.category ? `<div class="c-sub">${esc(t.category)}</div>` : ''}
-          </div>
-        </div>
-      `).join('') + `</div>`;
-    }
 
     col.innerHTML = html;
     col.querySelectorAll('[data-plan-day]').forEach(row=>{
@@ -2114,13 +2099,11 @@
   let taskOnceHistoryOpen = false;
   function renderTaskMgmt(){
     $('#taskStat').textContent = `共 ${state.tasks.length} 个任务`;
-    const longterm = state.tasks.filter(t=>taskKindOf(t)==='longterm');
     const daily = state.tasks.filter(t=>taskKindOf(t)==='daily');
     const once = state.tasks.filter(t=>taskKindOf(t)==='once');
     // 一次性任务在到期那天被勾完成后，归到下面折叠的"历史任务"里，不继续留在主列表里占地方
     const onceActive = once.filter(t=> !isTaskDone(t.task_id, t.due_date));
     const onceHistory = once.filter(t=> isTaskDone(t.task_id, t.due_date));
-    renderTaskGroup($('#taskListLongterm'), longterm, '还没有长期任务，点右下角「+」新建一个');
     renderTaskGroup($('#taskListDaily'), daily, '还没有日常任务，点右下角「+」新建一个');
     renderTaskGroup($('#taskListOnce'), onceActive, '还没有一次性任务，点右下角「+」新建一个');
 
@@ -2154,9 +2137,7 @@
       const timeLabel = taskTimeRangeLabel(t);
       const subtitle = kind==='daily'
         ? `每周${(t.repeat_days||[]).map(d=>d.replace('周','')).join('/')}` + (timeLabel?` · ${timeLabel}`:'') + (t.repeat_until?` · 至${t.repeat_until}`:'')
-        : kind==='once'
-          ? (t.due_date ? `截止 ${t.due_date}${timeLabel?' '+timeLabel:''}` : '未设日期')
-          : '长期目标';
+        : (t.due_date ? `截止 ${t.due_date}${timeLabel?' '+timeLabel:''}` : '未设日期');
       const row = document.createElement('div');
       row.className = 'mgmt-row' + (expandedTaskId===t.task_id?' expanded':'');
       row.innerHTML = `
@@ -2176,7 +2157,6 @@
         let html = `<div class="cd-section-head"><span>详情</span><button class="link-btn" data-toggle-task-edit="${t.task_id}">${isEditing?'完成':'修改'}</button></div>`;
         html += `<div class="session-view-row" style="align-items:center;"><span>移到</span>
           <select class="ted-move-kind" data-task="${t.task_id}">
-            <option value="longterm" ${kind==='longterm'?'selected':''}>长期任务</option>
             <option value="daily" ${kind==='daily'?'selected':''}>日常任务</option>
             <option value="once" ${kind==='once'?'selected':''}>一次性任务</option>
           </select>
@@ -2222,7 +2202,7 @@
           t.task_kind = newKind;
           t.is_recurring = (newKind === 'daily');
           if(newKind === 'daily' && (!t.repeat_days || t.repeat_days.length===0)) t.repeat_days = [...DAYS];
-          await saveState(); renderAll(); toast('已移到"'+({longterm:'长期任务',daily:'日常任务',once:'一次性任务'}[newKind])+'"');
+          await saveState(); renderAll(); toast('已移到"'+({daily:'日常任务',once:'一次性任务'}[newKind])+'"');
         };
         if(isEditing){
           const commit = async ()=>{
