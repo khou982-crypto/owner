@@ -309,8 +309,8 @@
     .sidebar .side-item svg{ width:19px; height:19px; stroke:currentColor; fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; flex-shrink:0; }
     .sidebar .side-item.active{ background:var(--accent-tint); color:var(--accent-deep); }
     .tabbar-wrap{ display:none; }
-    .fab-wrap{ left:224px; right:0; max-width:1100px; transition:left 0.2s ease; }
-    .phone{ max-width:1100px; box-shadow:none; }
+    .fab-wrap{ left:224px; right:0; max-width:none; transition:left 0.2s ease; }
+    .phone{ max-width:none; box-shadow:none; }
     .view{ padding-bottom:40px; }
 
     body.sidebar-collapsed{ padding-left:72px; }
@@ -488,19 +488,17 @@
     </div>
     <div class="group-label" style="display:flex; align-items:center; justify-content:space-between;">
       <span>Gmail 扫描规则</span>
-      <span id="addGmailRuleRow" style="cursor:pointer; font-size:16px; color:var(--ink-2); font-weight:600;">＋</span>
+      <span id="addGmailRuleRow" style="cursor:pointer; font-size:14px; color:var(--ink-2); font-weight:500;">＋</span>
     </div>
     <div class="more-group" id="gmailRuleMgmtGroup"></div>
-    <div class="group-label">
-      <span id="birthdaySectionToggle" style="display:flex; align-items:center; gap:6px; cursor:pointer;">
-        <span id="birthdaySectionArrow" style="display:inline-block; transition:transform 0.2s;">›</span>生日
-      </span>
+    <div class="group-label" id="birthdaySectionToggle" style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;">
+      <span>生日</span>
+      <span id="birthdaySectionArrow" style="display:inline-block; transition:transform 0.2s; font-size:14px; font-weight:500;">›</span>
     </div>
     <div class="more-group" id="birthdayMgmtGroup" style="display:none;"></div>
-    <div class="group-label">
-      <span id="fitnessCategorySectionToggle" style="display:flex; align-items:center; gap:6px; cursor:pointer;">
-        <span id="fitnessCategorySectionArrow" style="display:inline-block; transition:transform 0.2s;">›</span>健身分类
-      </span>
+    <div class="group-label" id="fitnessCategorySectionToggle" style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;">
+      <span>健身分类</span>
+      <span id="fitnessCategorySectionArrow" style="display:inline-block; transition:transform 0.2s; font-size:14px; font-weight:500;">›</span>
     </div>
     <div class="more-group" id="fitnessCategoryGroup" style="display:none;"></div>
     <div class="group-label">数据</div>
@@ -745,6 +743,7 @@
   let selectedRepeatDays = [];
   let expandedCourseId = null;
   let expandedTaskId = null;
+  let expandedPlanDay = null;
   let activeTab = 'overview';
   let ovSelectedDate = fmtDate(new Date());
   let monthViewOpen = false;
@@ -1670,19 +1669,32 @@
 
     html += `<div class="section-head"><h2>本周课程</h2></div>`;
     const weekRows = DAYS.map(d=>{
-      const sessions = state.sessions.filter(s=>s.day_of_week===d);
+      const sessions = state.sessions.filter(s=>s.day_of_week===d).sort((a,b)=>timeMin(a.start_time)-timeMin(b.start_time));
       if(sessions.length===0) return '';
       const names = [...new Set(sessions.map(s=>{
         const c = state.courses.find(c=>c.course_id===s.course_id);
         return c ? c.course_name : '';
       }).filter(Boolean))].join('、');
       if(!names) return '';
-      return `<div class="mgmt-row" style="cursor:default;">
+      const isOpen = expandedPlanDay===d;
+      let row = `<div class="mgmt-row${isOpen?' expanded':''}" data-plan-day="${esc(d)}">
         <div class="c-body">
           <div class="c-title">${esc(d)}</div>
           <div class="c-sub">${esc(names)}</div>
         </div>
+        <div class="chev">›</div>
       </div>`;
+      if(isOpen){
+        row += `<div class="mgmt-detail open">` + sessions.map(s=>{
+          const c = state.courses.find(c=>c.course_id===s.course_id);
+          const loc = s.location || (c && c.default_location) || '';
+          return `<div class="session-view-row">
+            <span class="mono">${esc(s.start_time)}–${esc(s.end_time)}</span>
+            <span class="sv-loc">${esc(c?c.course_name:'')}${loc?' · '+esc(loc):''}</span>
+          </div>`;
+        }).join('') + `</div>`;
+      }
+      return row;
     }).filter(Boolean).join('');
     html += weekRows ? `<div class="mgmt-list">${weekRows}</div>` : `<div class="empty-block">这周没有课</div>`;
 
@@ -1702,6 +1714,13 @@
     }
 
     col.innerHTML = html;
+    col.querySelectorAll('[data-plan-day]').forEach(row=>{
+      row.onclick = ()=>{
+        const d = row.dataset.planDay;
+        expandedPlanDay = expandedPlanDay===d ? null : d;
+        renderOverviewPlanColumn();
+      };
+    });
   }
 
   function isFitnessDay(dateStr){ return state.fitness_days.some(f=>f.date===dateStr); }
