@@ -487,12 +487,22 @@
       <div class="more-row export" id="gmailPendingRow"><span class="m-label" style="color:var(--accent-deep);">Gmail 待确认</span><span class="m-tag" id="gmailPendingBadge" style="display:none;"></span><span class="chev">›</span></div>
     </div>
     <div class="group-label" style="display:flex; align-items:center; justify-content:space-between;">
+      <span>Gmail 扫描规则</span>
+      <span id="addGmailRuleRow" style="cursor:pointer; font-size:16px; color:var(--ink-2); font-weight:600;">＋</span>
+    </div>
+    <div class="more-group" id="gmailRuleMgmtGroup"></div>
+    <div class="group-label">
       <span id="birthdaySectionToggle" style="display:flex; align-items:center; gap:6px; cursor:pointer;">
         <span id="birthdaySectionArrow" style="display:inline-block; transition:transform 0.2s;">›</span>生日
       </span>
-      <span id="addBirthdayRow" style="cursor:pointer; font-size:16px; color:var(--ink-2); font-weight:600;">＋</span>
     </div>
     <div class="more-group" id="birthdayMgmtGroup" style="display:none;"></div>
+    <div class="group-label">
+      <span id="fitnessCategorySectionToggle" style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+        <span id="fitnessCategorySectionArrow" style="display:inline-block; transition:transform 0.2s;">›</span>健身分类
+      </span>
+    </div>
+    <div class="more-group" id="fitnessCategoryGroup" style="display:none;"></div>
     <div class="group-label">数据</div>
     <div class="more-group">
       <div class="more-row export" id="exportJsonRow"><span class="m-label">导出 JSON（全部数据）</span><span class="chev">›</span></div>
@@ -556,7 +566,13 @@
     <div class="sheet-body">
       <div class="f-group">
         <div class="f-row"><label>任务标题</label><input id="f_t_title" placeholder="如：交微积分作业"></div>
-        <div class="f-row"><label>分类（可留空）</label><input id="f_t_category" placeholder="如：学业 / 生活 / 健身"></div>
+        <div class="f-row"><label>分类（可留空）</label>
+          <select id="f_t_category">
+            <option value="">不选</option>
+            <option value="线上">线上</option>
+            <option value="线下">线下</option>
+          </select>
+        </div>
         <div class="f-row"><label>关联课程（可不选）</label>
           <select id="f_t_course"><option value="">不关联</option></select>
         </div>
@@ -575,7 +591,8 @@
           </div>
         </div>
         <div class="f-row" id="onceRow"><label>截止日期</label><input type="date" id="f_t_due"></div>
-        <div class="f-row" id="onceTimeRow"><label>具体时间（可留空）</label><input type="time" id="f_t_due_time"></div>
+        <div class="f-row" id="onceTimeRow"><label>开始时间（可留空）</label><input type="time" id="f_t_due_time"></div>
+        <div class="f-row" id="onceEndTimeRow"><label>结束时间（可留空）</label><input type="time" id="f_t_end_time"></div>
         <div class="f-row" id="repeatRow" style="display:none;">
           <label>重复星期（可多选）</label>
           <div class="chip-toggle-row" id="repeatDaysRow"></div>
@@ -673,6 +690,28 @@
     </div>
   </div>
 
+  <!-- ===== GMAIL RULE SHEET ===== -->
+  <div class="sheet" id="gmailRuleSheet">
+    <div class="sheet-head">
+      <button class="sh-btn sh-cancel" id="gmailRuleSheetCancel">取消</button>
+      <div class="sh-title" id="gmailRuleSheetTitle">新建扫描规则</div>
+      <button class="sh-btn sh-save" id="gmailRuleSheetSave">保存</button>
+    </div>
+    <div class="sheet-body">
+      <div class="f-group"><div class="f-row"><label>备注名</label><input id="f_gr_label" placeholder="比如：Canvas 教务通知"></div></div>
+      <div class="f-group"><div class="f-row"><label>Gmail 搜索语法</label><input id="f_gr_query" class="mono" placeholder="from:someone@example.com"></div></div>
+      <div class="f-group">
+        <div class="f-row"><label>状态</label>
+          <div class="segmented" id="gmailRuleActiveSegment">
+            <button data-active="true">启用</button>
+            <button data-active="false">停用</button>
+          </div>
+        </div>
+      </div>
+      <div class="f-group"><button id="gmailRuleSheetDelete" style="display:none; width:100%; padding:10px; border-radius:10px; background:var(--danger-tint); color:var(--danger); border:none; font-size:13.5px; font-weight:600; cursor:pointer;">删除这条规则</button></div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 </div>
 
@@ -699,7 +738,7 @@
     {key:'more', label:'更多', icon:['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z','M8.3 12h.01','M12 12h.01','M15.7 12h.01'], soon:false},
   ];
 
-  let state = { courses: [], sessions: [], tasks: [], completions: [], supplements: [], supplement_logs: [], meals: [], assignments: [], fitness_days: [], sugar_days: [], birthdays: [] };
+  let state = { courses: [], sessions: [], tasks: [], completions: [], supplements: [], supplement_logs: [], meals: [], assignments: [], fitness_days: [], sugar_days: [], birthdays: [], fitness_categories: [], fitness_day_categories: [], gmail_scan_rules: [] };
   let selectedColor = COLORS[0];
   let selectedPriority = '无';
   let taskType = 'once';
@@ -733,7 +772,7 @@
   async function loadState(){
     if(!currentUser) return;
     try{
-      const [c,s,t,cp,sp,sl,fd,ml,ag,sd,bd] = await Promise.all([
+      const [c,s,t,cp,sp,sl,fd,ml,ag,sd,bd,fc,fdc,gsr] = await Promise.all([
         sb.from('courses').select('*'),
         sb.from('course_sessions').select('*'),
         sb.from('tasks').select('*'),
@@ -745,6 +784,9 @@
         sb.from('assignments').select('*'),
         sb.from('sugar_days').select('*'),
         sb.from('birthdays').select('*'),
+        sb.from('fitness_categories').select('*'),
+        sb.from('fitness_day_categories').select('*'),
+        sb.from('gmail_scan_rules').select('*'),
       ]);
       state.courses = c.data || [];
       state.sessions = s.data || [];
@@ -757,6 +799,9 @@
       state.meals = ml.data || [];
       state.assignments = ag.data || [];
       state.birthdays = bd.data || [];
+      state.fitness_categories = fc.data || [];
+      state.fitness_day_categories = fdc.data || [];
+      state.gmail_scan_rules = gsr.data || [];
     }catch(e){ console.error(e); toast('数据加载失败，请检查网络后刷新'); }
   }
   // 数据库里date类型的字段不接受空字符串，必须转成null，否则整批写入会被拒绝
@@ -787,6 +832,9 @@
       if(state.meals.length) jobs.push(sb.from('meals').upsert(cleanRows(state.meals), {onConflict:'meal_id'}));
       if(state.assignments.length) jobs.push(sb.from('assignments').upsert(cleanRows(state.assignments), {onConflict:'assignment_id'}));
       if(state.birthdays.length) jobs.push(sb.from('birthdays').upsert(cleanRows(state.birthdays), {onConflict:'id'}));
+      if(state.fitness_categories.length) jobs.push(sb.from('fitness_categories').upsert(cleanRows(state.fitness_categories), {onConflict:'id'}));
+      if(state.fitness_day_categories.length) jobs.push(sb.from('fitness_day_categories').upsert(cleanRows(state.fitness_day_categories), {onConflict:'id'}));
+      if(state.gmail_scan_rules.length) jobs.push(sb.from('gmail_scan_rules').upsert(cleanRows(state.gmail_scan_rules), {onConflict:'id'}));
       const results = await Promise.all(jobs);
       const failed = results.find(r=>r.error);
       if(failed) throw failed.error;
@@ -843,6 +891,8 @@
     if(currentUser) $('#accountEmailLabel').textContent = currentUser.email;
     refreshGmailPendingBadge();
     renderBirthdayMgmt();
+    renderFitnessCategoryMgmt();
+    renderGmailRuleMgmt();
   }
   $('#signOutRow').onclick = async ()=>{
     if(!confirm('确定退出登录吗？')) return;
@@ -1123,7 +1173,6 @@
   }
   $('#f_b_calendar').onchange = syncBirthdayDayLimit;
   function closeBirthdaySheet(){ birthdaySheet.classList.remove('open'); backdrop.classList.remove('open'); }
-  $('#addBirthdayRow').onclick = (e)=>{ e.stopPropagation(); openBirthdaySheet(null); };
   let birthdayMgmtOpen = false;
   $('#birthdaySectionToggle').onclick = ()=>{ birthdayMgmtOpen = !birthdayMgmtOpen; renderBirthdayMgmt(); };
   $('#birthdaySheetCancel').onclick = closeBirthdaySheet;
@@ -1169,39 +1218,41 @@
     wrap.style.display = birthdayMgmtOpen ? '' : 'none';
     const arrow = $('#birthdaySectionArrow');
     if(arrow) arrow.style.transform = birthdayMgmtOpen ? 'rotate(90deg)' : '';
+    const addRowHtml = `<div class="more-row export" id="addBirthdayRow"><span class="m-label" style="color:var(--accent-deep);">+ 添加生日</span></div>`;
     if(state.birthdays.length===0){
-      wrap.innerHTML = `<div class="more-row"><span class="m-label" style="color:var(--ink-2);">还没有添加生日</span></div>`;
-      return;
+      wrap.innerHTML = `<div class="more-row"><span class="m-label" style="color:var(--ink-2);">还没有添加生日</span></div>` + addRowHtml;
+    }else{
+      wrap.innerHTML = state.birthdays.map(b=>{
+        const dateLabel = (b.calendar_type==='lunar'?'农历':'公历') + `${b.month}月${b.day}日`;
+        return `<div class="more-row export" data-edit-bday="${b.id}">
+          <span class="m-label">${esc(b.name)} · ${dateLabel}</span>
+          <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
+            <span class="mono" data-countdown-id="${b.id}" style="font-size:12.5px; color:var(--accent-deep); white-space:nowrap;"></span>
+            <button data-del-bday-quick="${b.id}" title="删除" style="border:none; background:none; color:var(--ink-2); font-size:17px; line-height:1; cursor:pointer; padding:2px 4px;">×</button>
+          </div>
+        </div>`;
+      }).join('') + addRowHtml;
+      tickBirthdayCountdowns();
+      wrap.querySelectorAll('[data-edit-bday]').forEach(row=>{
+        row.onclick = ()=>{
+          const b = state.birthdays.find(x=>x.id===row.dataset.editBday);
+          if(b) openBirthdaySheet(b);
+        };
+      });
+      wrap.querySelectorAll('[data-del-bday-quick]').forEach(btn=>{
+        btn.onclick = async (e)=>{
+          e.stopPropagation();
+          const id = btn.dataset.delBdayQuick;
+          const b = state.birthdays.find(x=>x.id===id);
+          if(!confirm(`确定删除「${b?b.name:''}」这条生日吗？`)) return;
+          state.birthdays = state.birthdays.filter(x=>x.id!==id);
+          await sb.from('birthdays').delete().eq('id', id);
+          renderBirthdayMgmt();
+          renderOverview();
+        };
+      });
     }
-    wrap.innerHTML = state.birthdays.map(b=>{
-      const dateLabel = (b.calendar_type==='lunar'?'农历':'公历') + `${b.month}月${b.day}日`;
-      return `<div class="more-row export" data-edit-bday="${b.id}">
-        <span class="m-label">${esc(b.name)} · ${dateLabel}</span>
-        <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
-          <span class="mono" data-countdown-id="${b.id}" style="font-size:12.5px; color:var(--accent-deep); white-space:nowrap;"></span>
-          <button data-del-bday-quick="${b.id}" title="删除" style="border:none; background:none; color:var(--ink-2); font-size:17px; line-height:1; cursor:pointer; padding:2px 4px;">×</button>
-        </div>
-      </div>`;
-    }).join('');
-    tickBirthdayCountdowns();
-    wrap.querySelectorAll('[data-edit-bday]').forEach(row=>{
-      row.onclick = ()=>{
-        const b = state.birthdays.find(x=>x.id===row.dataset.editBday);
-        if(b) openBirthdaySheet(b);
-      };
-    });
-    wrap.querySelectorAll('[data-del-bday-quick]').forEach(btn=>{
-      btn.onclick = async (e)=>{
-        e.stopPropagation();
-        const id = btn.dataset.delBdayQuick;
-        const b = state.birthdays.find(x=>x.id===id);
-        if(!confirm(`确定删除「${b?b.name:''}」这条生日吗？`)) return;
-        state.birthdays = state.birthdays.filter(x=>x.id!==id);
-        await sb.from('birthdays').delete().eq('id', id);
-        renderBirthdayMgmt();
-        renderOverview();
-      };
-    });
+    $('#addBirthdayRow').onclick = (e)=>{ e.stopPropagation(); openBirthdaySheet(null); };
   }
 
   function birthdayNextOccurrenceDate(b){
@@ -1225,6 +1276,123 @@
     });
   }
   setInterval(tickBirthdayCountdowns, 1000);
+
+  // ================= Gmail 扫描规则管理 =================
+  const gmailRuleSheet = $('#gmailRuleSheet');
+  let editingGmailRuleId = null;
+  function openGmailRuleSheet(existing){
+    editingGmailRuleId = existing ? existing.id : null;
+    $('#gmailRuleSheetTitle').textContent = existing ? '编辑扫描规则' : '新建扫描规则';
+    $('#f_gr_label').value = existing ? (existing.label||'') : '';
+    $('#f_gr_query').value = existing ? existing.query_fragment : '';
+    const active = existing ? existing.active !== false : true;
+    document.querySelectorAll('#gmailRuleActiveSegment button').forEach(b=>{
+      b.classList.toggle('sel', (b.dataset.active==='true')===active);
+    });
+    $('#gmailRuleSheetDelete').style.display = existing ? 'block' : 'none';
+    gmailRuleSheet.classList.add('open'); backdrop.classList.add('open');
+  }
+  function closeGmailRuleSheet(){ gmailRuleSheet.classList.remove('open'); backdrop.classList.remove('open'); }
+  $('#addGmailRuleRow').onclick = (e)=>{ e.stopPropagation(); openGmailRuleSheet(null); };
+  $('#gmailRuleSheetCancel').onclick = closeGmailRuleSheet;
+  document.querySelectorAll('#gmailRuleActiveSegment button').forEach(b=>{
+    b.onclick = ()=> document.querySelectorAll('#gmailRuleActiveSegment button').forEach(x=>x.classList.toggle('sel', x===b));
+  });
+  $('#gmailRuleSheetSave').onclick = async ()=>{
+    const label = $('#f_gr_label').value.trim();
+    const query_fragment = $('#f_gr_query').value.trim();
+    if(!query_fragment){ toast('请填 Gmail 搜索语法，比如 from:someone@example.com'); return; }
+    const activeBtn = document.querySelector('#gmailRuleActiveSegment button.sel');
+    const active = activeBtn ? activeBtn.dataset.active === 'true' : true;
+    const payload = { label, query_fragment, active };
+    if(editingGmailRuleId){
+      const r = state.gmail_scan_rules.find(x=>x.id===editingGmailRuleId);
+      if(r) Object.assign(r, payload);
+    }else{
+      state.gmail_scan_rules.push({ id: uid('gsr'), ...payload });
+    }
+    const ok = await saveState();
+    if(!ok) return;
+    closeGmailRuleSheet();
+    renderGmailRuleMgmt();
+  };
+  $('#gmailRuleSheetDelete').onclick = async ()=>{
+    if(!editingGmailRuleId) return;
+    const r = state.gmail_scan_rules.find(x=>x.id===editingGmailRuleId);
+    if(!confirm(`确定删除「${r?(r.label||r.query_fragment):''}」这条规则吗？`)) return;
+    state.gmail_scan_rules = state.gmail_scan_rules.filter(x=>x.id!==editingGmailRuleId);
+    await sb.from('gmail_scan_rules').delete().eq('id', editingGmailRuleId);
+    closeGmailRuleSheet();
+    renderGmailRuleMgmt();
+  };
+  function renderGmailRuleMgmt(){
+    const wrap = $('#gmailRuleMgmtGroup');
+    if(!wrap) return;
+    if(state.gmail_scan_rules.length===0){
+      wrap.innerHTML = `<div class="more-row"><span class="m-label" style="color:var(--ink-2);">还没有添加规则</span></div>`;
+      return;
+    }
+    wrap.innerHTML = state.gmail_scan_rules.map(r=>`
+      <div class="more-row export" data-edit-gmailrule="${r.id}">
+        <div class="c-body">
+          <div class="c-title">${esc(r.label || r.query_fragment)}</div>
+          <div class="c-sub mono">${esc(r.query_fragment)}${r.active===false?' · 已停用':''}</div>
+        </div>
+        <span class="chev">›</span>
+      </div>
+    `).join('');
+    wrap.querySelectorAll('[data-edit-gmailrule]').forEach(row=>{
+      row.onclick = ()=>{
+        const r = state.gmail_scan_rules.find(x=>x.id===row.dataset.editGmailrule);
+        if(r) openGmailRuleSheet(r);
+      };
+    });
+  }
+
+  // ================= 健身分类管理 =================
+  let fitnessCategoryMgmtOpen = false;
+  $('#fitnessCategorySectionToggle').onclick = ()=>{ fitnessCategoryMgmtOpen = !fitnessCategoryMgmtOpen; renderFitnessCategoryMgmt(); };
+  async function addFitnessCategory(){
+    const name = prompt('新健身分类名称，比如"核心"、"练髋"：');
+    if(!name || !name.trim()) return;
+    state.fitness_categories.push({ id: uid('fitcat'), name: name.trim() });
+    const ok = await saveState();
+    if(!ok) return;
+    renderFitnessCategoryMgmt();
+    renderOverview();
+  }
+  function renderFitnessCategoryMgmt(){
+    const wrap = $('#fitnessCategoryGroup');
+    if(!wrap) return;
+    wrap.style.display = fitnessCategoryMgmtOpen ? '' : 'none';
+    const arrow = $('#fitnessCategorySectionArrow');
+    if(arrow) arrow.style.transform = fitnessCategoryMgmtOpen ? 'rotate(90deg)' : '';
+    const addRowHtml = `<div class="more-row export" id="addFitnessCategoryRow"><span class="m-label" style="color:var(--accent-deep);">+ 添加分类</span></div>`;
+    if(state.fitness_categories.length===0){
+      wrap.innerHTML = `<div class="more-row"><span class="m-label" style="color:var(--ink-2);">还没有添加分类</span></div>` + addRowHtml;
+      $('#addFitnessCategoryRow').onclick = addFitnessCategory;
+      return;
+    }
+    wrap.innerHTML = state.fitness_categories.map(c=>`
+      <div class="more-row">
+        <span class="m-label">${esc(c.name)}</span>
+        <button data-del-fitcat="${c.id}" title="删除" style="border:none; background:none; color:var(--ink-2); font-size:17px; line-height:1; cursor:pointer; padding:2px 6px;">×</button>
+      </div>
+    `).join('') + addRowHtml;
+    $('#addFitnessCategoryRow').onclick = addFitnessCategory;
+    wrap.querySelectorAll('[data-del-fitcat]').forEach(btn=>{
+      btn.onclick = async ()=>{
+        const id = btn.dataset.delFitcat;
+        const c = state.fitness_categories.find(x=>x.id===id);
+        if(!confirm(`确定删除分类「${c?c.name:''}」吗？相关的打卡记录也会一起删掉。`)) return;
+        state.fitness_categories = state.fitness_categories.filter(x=>x.id!==id);
+        state.fitness_day_categories = state.fitness_day_categories.filter(x=>x.category_id!==id);
+        await sb.from('fitness_categories').delete().eq('id', id); // 数据库外键级联删除会顺带清掉fitness_day_categories里的关联记录
+        renderFitnessCategoryMgmt();
+        renderOverview();
+      };
+    });
+  }
 
   // ================= 复盘 / 回顾 =================
   let reviewPeriod = 'week';
@@ -1464,7 +1632,7 @@
         if(t.category) chips += `<span class="chip">${esc(t.category)}</span>`;
         if(t.priority && t.priority!=='无') chips += `<span class="chip priority-${t.priority}">${t.priority}优先级</span>`;
         if(t.is_recurring) chips += `<span class="chip">每周重复</span>`;
-        if(t.due_time) chips += `<span class="chip mono">${t.due_time}</span>`;
+        if(t.due_time) chips += `<span class="chip mono">${esc(taskTimeRangeLabel(t))}</span>`;
         return `<div class="task-row">
           <div class="t-check${done?' done':''}" data-task="${t.task_id}"></div>
           <div class="t-body">
@@ -1542,9 +1710,20 @@
     if(existing){
       state.fitness_days = state.fitness_days.filter(f=>f.date!==dateStr);
       await sb.from('fitness_days').delete().eq('id', existing.id);
+      // 取消健身日的时候顺手清掉这天挂的分类，不健身的日子不该留着分类标记
+      const toRemove = state.fitness_day_categories.filter(x=>x.date===dateStr);
+      state.fitness_day_categories = state.fitness_day_categories.filter(x=>x.date!==dateStr);
+      for(const r of toRemove){ await sb.from('fitness_day_categories').delete().eq('id', r.id); }
     }else{
       state.fitness_days.push({id:uid('fit'), date:dateStr});
     }
+    await saveState();
+  }
+  function fitnessCategoriesForDate(dateStr){ return state.fitness_day_categories.filter(x=>x.date===dateStr).map(x=>x.category_id); }
+  async function toggleFitnessDayCategory(dateStr, categoryId){
+    const idx = state.fitness_day_categories.findIndex(x=>x.date===dateStr && x.category_id===categoryId);
+    if(idx>=0) state.fitness_day_categories.splice(idx,1);
+    else state.fitness_day_categories.push({id:uid('fdc'), date:dateStr, category_id:categoryId});
     await saveState();
   }
   function isSugarDay(dateStr){ return state.sugar_days.some(f=>f.date===dateStr); }
@@ -1580,6 +1759,16 @@
       <button class="fitness-btn${gymDay?' on':''}" id="fitnessOnBtn">健身</button>
       <button class="fitness-btn${!gymDay?' on':''}" id="fitnessOffBtn">不健身</button>
     </div>`;
+    if(gymDay){
+      if(state.fitness_categories.length===0){
+        html += `<div style="padding:0 20px 14px; font-size:12px; color:var(--ink-2);">还没有健身分类，去"更多"页新建</div>`;
+      }else{
+        const selectedCats = fitnessCategoriesForDate(ovSelectedDate);
+        html += `<div class="chip-toggle-row" style="padding:0 20px 14px;">` +
+          state.fitness_categories.map(c=>`<span class="chip-toggle${selectedCats.includes(c.id)?' sel':''}" data-fitcat="${c.id}">${esc(c.name)}</span>`).join('') +
+        `</div>`;
+      }
+    }
     html += `<div class="fitness-toggle-row" style="padding:0 20px 14px; display:flex; gap:10px;">
       <button class="fitness-btn sugar-btn${sugarDay?' on':''}" id="sugarOnBtn">控糖</button>
       <button class="fitness-btn sugar-btn${!sugarDay?' on':''}" id="sugarOffBtn">没控糖</button>
@@ -1615,6 +1804,9 @@
     $('#fitnessOffBtn').onclick = async ()=>{ if(isFitnessDay(ovSelectedDate)){ await toggleFitnessDay(ovSelectedDate); renderOverview(); } };
     $('#sugarOnBtn').onclick = async ()=>{ if(!isSugarDay(ovSelectedDate)){ await toggleSugarDay(ovSelectedDate); renderOverview(); } };
     $('#sugarOffBtn').onclick = async ()=>{ if(isSugarDay(ovSelectedDate)){ await toggleSugarDay(ovSelectedDate); renderOverview(); } };
+    document.querySelectorAll('#ovHealth [data-fitcat]').forEach(chip=>{
+      chip.onclick = async ()=>{ await toggleFitnessDayCategory(ovSelectedDate, chip.dataset.fitcat); renderOverview(); };
+    });
     document.querySelectorAll('#ovHealth .supp-check-row .t-check').forEach(el=>{
       el.onclick = async ()=>{ await toggleSuppLog(el.dataset.supp, ovSelectedDate); renderOverview(); };
     });
@@ -1889,6 +2081,17 @@
     if(t.task_kind) return t.task_kind;
     return t.is_recurring ? 'daily' : 'once'; // 兼容旧数据没有task_kind字段的情况
   }
+  function taskTimeRangeLabel(t){
+    if(!t.due_time) return '';
+    return t.end_time ? `${t.due_time}-${t.end_time}` : t.due_time;
+  }
+  // 分类固定成"线上/线下"两个选项；如果旧数据是别的自由文本（比如"学业"），额外加一个选项保留，不静默丢弃
+  function taskCategoryOptionsHtml(current){
+    const base = ['线上','线下'];
+    const opts = ['', ...base];
+    if(current && !base.includes(current)) opts.push(current);
+    return opts.map(v=>`<option value="${esc(v)}" ${v===current?'selected':''}>${v||'不选'}</option>`).join('');
+  }
   let taskOnceHistoryOpen = false;
   function renderTaskMgmt(){
     $('#taskStat').textContent = `共 ${state.tasks.length} 个任务`;
@@ -1929,10 +2132,11 @@
     tasks.forEach(t=>{
       const course = state.courses.find(c=>c.course_id===t.related_course_id);
       const kind = taskKindOf(t);
+      const timeLabel = taskTimeRangeLabel(t);
       const subtitle = kind==='daily'
-        ? `每周${(t.repeat_days||[]).map(d=>d.replace('周','')).join('/')}` + (t.repeat_until?` · 至${t.repeat_until}`:'')
+        ? `每周${(t.repeat_days||[]).map(d=>d.replace('周','')).join('/')}` + (timeLabel?` · ${timeLabel}`:'') + (t.repeat_until?` · 至${t.repeat_until}`:'')
         : kind==='once'
-          ? (t.due_date ? `截止 ${t.due_date}${t.due_time?' '+t.due_time:''}` : '未设日期')
+          ? (t.due_date ? `截止 ${t.due_date}${timeLabel?' '+timeLabel:''}` : '未设日期')
           : '长期目标';
       const row = document.createElement('div');
       row.className = 'mgmt-row' + (expandedTaskId===t.task_id?' expanded':'');
@@ -1967,13 +2171,21 @@
             <input type="text" class="ted-title" placeholder="标题" value="${esc(t.title)}" style="flex:1 1 100%; font-family:-apple-system,sans-serif;">
           </div>`;
           html += `<div class="session-chip">
-            <input type="text" class="ted-category" placeholder="分类" value="${esc(t.category)}" style="flex:1; font-family:-apple-system,sans-serif;">
+            <select class="ted-category" style="flex:1;">${taskCategoryOptionsHtml(t.category)}</select>
             <select class="ted-priority">${PRIORITIES.map(p=>`<option ${p===t.priority?'selected':''}>${p}</option>`).join('')}</select>
           </div>`;
+          html += `<div class="session-chip">
+            <select class="ted-course" style="flex:1;">
+              <option value="">不关联课程</option>
+              ${state.courses.map(c=>`<option value="${c.course_id}" ${c.course_id===t.related_course_id?'selected':''}>${esc(c.course_name)}</option>`).join('')}
+            </select>
+          </div>`;
           if(kind==='once'){
-            html += `<div class="session-chip"><input type="date" class="ted-due" value="${t.due_date||''}"><input type="time" class="ted-due-time" value="${t.due_time||''}"></div>`;
+            html += `<div class="session-chip"><input type="date" class="ted-due" value="${t.due_date||''}"></div>`;
+            html += `<div class="session-chip"><input type="time" class="ted-due-time" value="${t.due_time||''}"><span style="color:var(--ink-2); padding:0 6px;">至</span><input type="time" class="ted-end-time" value="${t.end_time||''}"></div>`;
           }else if(kind==='daily'){
             html += `<div class="chip-toggle-row" style="padding:8px 0;">` + DAYS.map(d=>`<span class="chip-toggle ted-day${(t.repeat_days||[]).includes(d)?' sel':''}" data-day="${d}">${d.replace('周','')}</span>`).join('') + `</div>`;
+            html += `<div class="session-chip"><input type="time" class="ted-due-time" value="${t.due_time||''}"><span style="color:var(--ink-2); padding:0 6px;">至</span><input type="time" class="ted-end-time" value="${t.end_time||''}"></div>`;
           }
           html += `<div class="session-chip"><input type="text" class="ted-notes" placeholder="备注" value="${esc(t.notes)}" style="flex:1; font-family:-apple-system,sans-serif;"></div>`;
         }
@@ -1996,14 +2208,16 @@
         if(isEditing){
           const commit = async ()=>{
             const titleInp = detail.querySelector('.ted-title'); if(titleInp && titleInp.value.trim()) t.title = titleInp.value.trim();
-            const catInp = detail.querySelector('.ted-category'); if(catInp) t.category = catInp.value.trim();
+            const catInp = detail.querySelector('.ted-category'); if(catInp) t.category = catInp.value;
             const prInp = detail.querySelector('.ted-priority'); if(prInp) t.priority = prInp.value;
+            const courseInp = detail.querySelector('.ted-course'); if(courseInp) t.related_course_id = courseInp.value;
             const dueInp = detail.querySelector('.ted-due'); if(dueInp) t.due_date = dueInp.value;
             const dueTimeInp = detail.querySelector('.ted-due-time'); if(dueTimeInp) t.due_time = dueTimeInp.value;
+            const endTimeInp = detail.querySelector('.ted-end-time'); if(endTimeInp) t.end_time = endTimeInp.value;
             const notesInp = detail.querySelector('.ted-notes'); if(notesInp) t.notes = notesInp.value.trim();
             await saveState(); renderOverview();
           };
-          detail.querySelectorAll('.ted-title,.ted-category,.ted-priority,.ted-due,.ted-due-time,.ted-notes').forEach(el=>{ el.onchange = commit; });
+          detail.querySelectorAll('.ted-title,.ted-category,.ted-priority,.ted-course,.ted-due,.ted-due-time,.ted-end-time,.ted-notes').forEach(el=>{ el.onchange = commit; });
           detail.querySelectorAll('.ted-day').forEach(chip=>{
             chip.onclick = async (e)=>{ e.stopPropagation();
               const d = chip.dataset.day;
@@ -2255,12 +2469,12 @@
   }
   function closeTaskSheet(){
     taskSheet.classList.remove('open'); backdrop.classList.remove('open');
-    ['f_t_title','f_t_category','f_t_due','f_t_due_time','f_t_until','f_t_notes'].forEach(id=>$('#'+id).value='');
+    ['f_t_title','f_t_category','f_t_due','f_t_due_time','f_t_end_time','f_t_until','f_t_notes'].forEach(id=>$('#'+id).value='');
     $('#f_t_course').value = '';
     selectedPriority = '无'; selectedRepeatDays = []; taskType = 'once';
   }
   $('#taskSheetCancel').onclick = closeTaskSheet;
-  backdrop.onclick = ()=>{ closeCourseSheet(); closeTaskSheet(); closeSuppSheet(); closeCanvasMapSheet(); $('#canvasPendingClose').click(); $('#gmailPendingClose').click(); closeBirthdaySheet(); };
+  backdrop.onclick = ()=>{ closeCourseSheet(); closeTaskSheet(); closeSuppSheet(); closeCanvasMapSheet(); $('#canvasPendingClose').click(); $('#gmailPendingClose').click(); closeBirthdaySheet(); closeGmailRuleSheet(); };
 
   function renderCourseSelect(){
     const sel = $('#f_t_course');
@@ -2294,7 +2508,8 @@
     taskType = type;
     document.querySelectorAll('#typeSegment button').forEach(b=>b.classList.toggle('sel', b.dataset.type===type));
     $('#onceRow').style.display = type==='once' ? 'block':'none';
-    $('#onceTimeRow').style.display = type==='once' ? 'block':'none';
+    $('#onceTimeRow').style.display = (type==='once' || type==='daily') ? 'block':'none';
+    $('#onceEndTimeRow').style.display = (type==='once' || type==='daily') ? 'block':'none';
     $('#repeatRow').style.display = type==='daily' ? 'block':'none';
     $('#untilRow').style.display = type==='daily' ? 'block':'none';
   }
@@ -2312,7 +2527,8 @@
       task_kind: taskType,
       is_recurring: taskType==='daily',
       due_date: taskType==='once' ? $('#f_t_due').value : '',
-      due_time: taskType==='once' ? $('#f_t_due_time').value : '',
+      due_time: (taskType==='once' || taskType==='daily') ? $('#f_t_due_time').value : '',
+      end_time: (taskType==='once' || taskType==='daily') ? $('#f_t_end_time').value : '',
       repeat_days: taskType==='daily' ? [...selectedRepeatDays] : [],
       repeat_until: taskType==='daily' ? $('#f_t_until').value : '',
       done: false,
@@ -2343,56 +2559,13 @@
   $('#exportJsonRow').onclick = ()=> download('self-ops-data.json', JSON.stringify(state,null,2), 'application/json');
   $('#exportCoursesRow').onclick = ()=> download('courses.csv', toCsv(state.courses, ['course_id','course_name','instructor','default_location','semester_start_date','semester_end_date','subtitle_folder_path','color_tag','notes']), 'text/csv');
   $('#exportSessionsRow').onclick = ()=> download('course_sessions.csv', toCsv(state.sessions, ['session_id','course_id','day_of_week','start_time','end_time','location']), 'text/csv');
-  $('#exportTasksRow').onclick = ()=> download('tasks.csv', toCsv(state.tasks, ['task_id','title','category','priority','related_course_id','is_recurring','due_date','repeat_days','repeat_until','notes']), 'text/csv');
+  $('#exportTasksRow').onclick = ()=> download('tasks.csv', toCsv(state.tasks, ['task_id','title','category','priority','related_course_id','is_recurring','due_date','due_time','end_time','repeat_days','repeat_until','notes']), 'text/csv');
   $('#exportCompletionsRow').onclick = ()=> download('task_completions.csv', toCsv(state.completions, ['completion_id','task_id','date']), 'text/csv');
   $('#exportSuppRow').onclick = ()=> download('supplements.csv', toCsv(state.supplements, ['supplement_id','name','schedule_type','notes']), 'text/csv');
   $('#exportSuppLogRow').onclick = ()=> download('supplement_logs.csv', toCsv(state.supplement_logs, ['log_id','supplement_id','date']), 'text/csv');
   $('#exportFitnessRow').onclick = ()=> download('fitness_days.csv', toCsv(state.fitness_days, ['id','date']), 'text/csv');
   $('#exportSugarRow').onclick = ()=> download('sugar_days.csv', toCsv(state.sugar_days, ['id','date']), 'text/csv');
   $('#exportMealsRow').onclick = ()=> download('meals.csv', toCsv(state.meals, ['meal_id','date','slot','content']), 'text/csv');
-
-  function seedRealCourses(){
-    const c1 = 'course_compsys726', c2 = 'course_compsys730', c3 = 'course_electeng704';
-    state.courses = [
-      { course_id:c1, course_name:'COMPSYS 726 Robotics & Intelligent Systems', instructor:'', default_location:'', semester_start_date:'2026-07-20', semester_end_date:'2026-11-16', subtitle_folder_path:'', color_tag:COLORS[0], notes:'' },
-      { course_id:c2, course_name:'COMPSYS 730 Robotics and Society', instructor:'', default_location:'', semester_start_date:'2026-07-20', semester_end_date:'2026-11-16', subtitle_folder_path:'', color_tag:COLORS[1], notes:'' },
-      { course_id:c3, course_name:'ELECTENG 704 Advanced Control Systems', instructor:'', default_location:'', semester_start_date:'2026-07-20', semester_end_date:'2026-11-16', subtitle_folder_path:'', color_tag:COLORS[2], notes:'教室已根据2026-07-28的换教室通知邮件更新。' },
-    ];
-    state.sessions = [
-      {session_id:uid('sess'), course_id:c1, day_of_week:'周一', start_time:'11:00', end_time:'13:00', location:'405-536 (Engineering Block 5, Room 536)'},
-      {session_id:uid('sess'), course_id:c1, day_of_week:'周一', start_time:'09:00', end_time:'10:00', location:'423-342 (Conference Centre, Room 342)'},
-      {session_id:uid('sess'), course_id:c1, day_of_week:'周二', start_time:'12:00', end_time:'13:00', location:'303-102 (Sci Maths & Physics, Room 102)'},
-      {session_id:uid('sess'), course_id:c1, day_of_week:'周三', start_time:'16:00', end_time:'17:00', location:'109-B10 (General Library, Room B10)'},
-      {session_id:uid('sess'), course_id:c2, day_of_week:'周四', start_time:'10:00', end_time:'12:00', location:'421W-201 (Architecture - West, Room 201)'},
-      {session_id:uid('sess'), course_id:c2, day_of_week:'周二', start_time:'10:00', end_time:'12:00', location:'423-348 (Conference Centre, Room 348)'},
-      {session_id:uid('sess'), course_id:c2, day_of_week:'周五', start_time:'10:00', end_time:'11:00', location:'260-092 (Owen G Glenn, Room 092)'},
-      {session_id:uid('sess'), course_id:c3, day_of_week:'周一', start_time:'16:00', end_time:'17:00', location:'303-G02 (Sci Maths & Physics, Room G02)'},
-      {session_id:uid('sess'), course_id:c3, day_of_week:'周二', start_time:'16:00', end_time:'17:00', location:'105S-039 (Clock Tower - South, Room 039)'},
-      {session_id:uid('sess'), course_id:c3, day_of_week:'周五', start_time:'14:00', end_time:'15:00', location:'303-G02 (Sci Maths & Physics, Room G02)'},
-    ];
-  }
-
-  function seedHealthAndTasks(){
-    if(state.supplements.length===0){
-      state.supplements = [
-        { supplement_id:uid('supp'), name:'鱼油', schedule_type:'daily', notes:'' },
-        { supplement_id:uid('supp'), name:'葡萄糖胺软骨素', schedule_type:'daily', notes:'关节保健品' },
-        { supplement_id:uid('supp'), name:'肌酸', schedule_type:'workout_day', notes:'只在健身日吃' },
-      ];
-    }
-    if(state.tasks.length===0){
-      state.tasks.push({
-        task_id: uid('task'), title:'自学 ELECTENG 704', category:'学业', priority:'中',
-        related_course_id:'course_electeng704', is_recurring:true,
-        due_date:'', repeat_days:[...DAYS], repeat_until:'', notes:'不去上课，自己每天学'
-      });
-      state.tasks.push({
-        task_id: uid('task'), title:'英语学习', category:'学业', priority:'中',
-        related_course_id:'', is_recurring:true,
-        due_date:'', repeat_days:[...DAYS], repeat_until:'', notes:''
-      });
-    }
-  }
 
   // ================= SWIPE TO CHANGE DAY =================
   (function setupSwipe(){
@@ -2477,9 +2650,6 @@
   };
 
   async function bootApp(){
-    seedHealthAndTasks();
-    if(state.courses.length===0) seedRealCourses();
-    await saveState();
     renderTabbar(); renderMore();
     renderAll();
     $('#fabAdd').style.display = 'none';
