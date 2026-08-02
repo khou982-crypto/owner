@@ -123,7 +123,7 @@
   .fc-stat-row{ display:flex; gap:26px; margin-bottom:16px; }
   .fc-num{ font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:600; letter-spacing:-0.01em; }
   .fc-label{ font-size:11px; color:var(--ink-2); margin-top:2px; }
-  .fc-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:5px; }
+  .fc-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:5px; max-width:320px; margin:0 auto; }
   .fc-weekday{ text-align:center; font-size:9.5px; color:var(--ink-2); padding-bottom:4px; }
   .fc-cell{ aspect-ratio:1/1; border-radius:6px; background:var(--bg-grouped); display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--ink-3); }
   .fc-cell.marked{ background:var(--good); color:#fff; font-weight:600; }
@@ -284,6 +284,57 @@
 
   .toast{ position:absolute; left:50%; bottom:100px; transform:translateX(-50%) translateY(10px); background:var(--ink); color:#fff; padding:10px 18px; border-radius:12px; font-size:13px; opacity:0; pointer-events:none; transition:all 0.25s ease; z-index:60; white-space:nowrap; }
   .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  /* ===== 桌面端（>=1024px）：侧边栏导航，替代底部标签栏 ===== */
+  .sidebar{ display:none; }
+  .ov-plan-col{ display:none; }
+  @media (min-width:1024px){
+    body{ padding-left:224px; justify-content:center; transition:padding-left 0.2s ease; }
+    .sidebar{
+      display:flex; flex-direction:column; gap:2px;
+      position:fixed; left:0; top:0; bottom:0; width:224px;
+      padding:28px 12px; box-sizing:border-box; background:var(--surface);
+      border-right:1px solid var(--hairline); z-index:40; transition:width 0.2s ease;
+    }
+    .sidebar .side-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; padding:0 10px; }
+    .sidebar .side-logo{ font-size:15px; font-weight:600; color:var(--ink); white-space:nowrap; overflow:hidden; }
+    .sidebar .side-toggle{ border:none; background:none; cursor:pointer; color:var(--ink-2); padding:4px; display:flex; align-items:center; flex-shrink:0; }
+    .sidebar .side-toggle svg{ width:18px; height:18px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+    .sidebar .side-item{
+      display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:10px;
+      cursor:pointer; color:var(--ink-2); font-size:14px; font-weight:500; transition:background 0.15s ease;
+      white-space:nowrap; overflow:hidden;
+    }
+    .sidebar .side-item:hover{ background:var(--bg-grouped); }
+    .sidebar .side-item svg{ width:19px; height:19px; stroke:currentColor; fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; flex-shrink:0; }
+    .sidebar .side-item.active{ background:var(--accent-tint); color:var(--accent-deep); }
+    .tabbar-wrap{ display:none; }
+    .fab-wrap{ left:224px; right:0; max-width:1100px; transition:left 0.2s ease; }
+    .phone{ max-width:1100px; box-shadow:none; }
+    .view{ padding-bottom:40px; }
+
+    body.sidebar-collapsed{ padding-left:72px; }
+    body.sidebar-collapsed .sidebar{ width:72px; }
+    body.sidebar-collapsed .sidebar .side-logo{ display:none; }
+    body.sidebar-collapsed .sidebar .side-header{ justify-content:center; padding:0; }
+    body.sidebar-collapsed .sidebar .side-item{ justify-content:center; padding:10px 0; }
+    body.sidebar-collapsed .sidebar .side-item span{ display:none; }
+    body.sidebar-collapsed .fab-wrap{ left:72px; }
+
+    /* 弹窗改成桌面常见的屏幕居中对话框，不再从底部滑出 */
+    .sheet{
+      left:50%; right:auto; top:50%; bottom:auto; margin:0;
+      width:520px; max-width:calc(100vw - 64px); max-height:80vh;
+      border-radius:16px; transform:translate(-50%,-50%) scale(0.96);
+      opacity:0; pointer-events:none; transition:opacity 0.18s ease, transform 0.18s ease;
+    }
+    .sheet.open{ transform:translate(-50%,-50%) scale(1); opacity:1; pointer-events:auto; }
+
+    /* 总览页左右分栏：左边计划（本周课程+长期任务），右边执行（现有的当天视图原样不动） */
+    .ov-plan-col{ display:block; }
+    #ovDayMode{ display:grid; grid-template-columns:1fr 1.3fr; gap:8px; align-items:start; }
+    #ovDayMode .ov-plan-col, #ovDayMode .ov-exec-col{ min-width:0; }
+  }
 </style>
 </head>
 <body>
@@ -302,6 +353,16 @@
   </div>
 </div>
 
+<div class="sidebar" id="sidebarNav" style="display:none;">
+  <div class="side-header">
+    <span class="side-logo">自我管理台账</span>
+    <button class="side-toggle" id="sidebarToggle" title="收起侧边栏">
+      <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>
+    </button>
+  </div>
+  <div id="sidebarItems" style="display:flex; flex-direction:column; gap:2px;"></div>
+</div>
+
 <div class="phone" id="phone" style="display:none;">
 
   <!-- ===== OVERVIEW (DAY VIEW) ===== -->
@@ -318,17 +379,20 @@
     </div>
 
     <div id="ovDayMode">
-      <div class="summary-row" id="summaryRow"></div>
-      <div class="day-strip" id="ovDayStrip"></div>
+      <div class="ov-plan-col" id="ovPlanCol"></div>
+      <div class="ov-exec-col">
+        <div class="summary-row" id="summaryRow"></div>
+        <div class="day-strip" id="ovDayStrip"></div>
 
-      <div class="section-head"><h2>课程</h2></div>
-      <div id="ovCourses"></div>
+        <div class="section-head"><h2>课程</h2></div>
+        <div id="ovCourses"></div>
 
-      <div class="section-head"><h2>任务</h2></div>
-      <div id="ovTasks"></div>
+        <div class="section-head"><h2>任务</h2></div>
+        <div id="ovTasks"></div>
 
-      <div class="section-head"><h2>健康</h2></div>
-      <div id="ovHealth"></div>
+        <div class="section-head"><h2>健康</h2></div>
+        <div id="ovHealth"></div>
+      </div>
     </div>
 
     <div id="ovMonthMode" style="display:none;">
@@ -388,6 +452,21 @@
 
     <div class="section-head"><h2>控糖记录</h2></div>
     <div class="fitness-chart-card" id="sugarChartCard"></div>
+  </div>
+
+  <!-- ===== REVIEW ===== -->
+  <div class="view" id="view-review">
+    <div class="topbar">
+      <h1>复盘</h1>
+      <div class="sub">回顾任务完成情况和健康打卡</div>
+    </div>
+    <div class="more-group" style="margin:14px 20px 0; padding:14px;">
+      <div class="segmented" id="reviewPeriodSegment" style="margin-bottom:14px;">
+        <button data-period="week">本周</button>
+        <button data-period="month">本月</button>
+      </div>
+      <div id="reviewStats"></div>
+    </div>
   </div>
 
   <!-- ===== MORE ===== -->
@@ -586,7 +665,7 @@
           </select>
         </div>
         <div class="f-row"><label>月</label><input id="f_b_month" type="number" min="1" max="12" placeholder="1-12"></div>
-        <div class="f-row"><label>日</label><input id="f_b_day" type="number" min="1" max="30" placeholder="1-30"></div>
+        <div class="f-row"><label>日</label><input id="f_b_day" type="number" min="1" max="31" placeholder="1-31"></div>
       </div>
       <div class="f-group"><div class="f-row"><label>提前几天提醒</label><input id="f_b_remind" type="number" min="0" value="3"></div></div>
       <div class="f-group"><div class="f-row"><label>备注（可留空）</label><textarea id="f_b_note" placeholder="比如礼物想法"></textarea></div></div>
@@ -616,6 +695,7 @@
     {key:'courses', label:'课程', icon:['M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z','M4 10h16','M8 3v4','M16 3v4'], soon:false},
     {key:'tasks', label:'任务', icon:['M5 5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z','M8.5 12l2.3 2.3L15.5 9.5'], soon:false},
     {key:'health', label:'健康', icon:['M12 20s-7-4.3-9.3-8.4C.9 8 2.1 4.6 5.5 4.1c2-.3 3.6.8 4.4 2.2C10.7 4.9 12.4 3.8 14.4 4.1c3.4.5 4.6 3.9 2.9 7.5C19 15.7 12 20 12 20z'], soon:false},
+    {key:'review', label:'复盘', icon:['M5 20V9','M12 20V4','M19 20v-7'], soon:false},
     {key:'more', label:'更多', icon:['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z','M8.3 12h.01','M12 12h.01','M15.7 12h.01'], soon:false},
   ];
 
@@ -722,19 +802,38 @@
   // ================= TAB BAR =================
   function renderTabbar(){
     const bar = $('#tabbar'); bar.innerHTML = '';
+    const side = $('#sidebarItems'); if(side) side.innerHTML = '';
     TABS.forEach(t=>{
       const btn = document.createElement('button');
       btn.className = 'tab-item' + (t.key===activeTab ? ' active':'');
       btn.innerHTML = `<span class="tab-icon-wrap"><svg viewBox="0 0 24 24">${t.icon.map(d=>`<path d="${d}"/>`).join('')}</svg></span><span>${t.label}</span>`;
       btn.onclick = ()=> switchTab(t);
       bar.appendChild(btn);
+
+      if(side){
+        const sideBtn = document.createElement('div');
+        sideBtn.className = 'side-item' + (t.key===activeTab ? ' active':'');
+        sideBtn.innerHTML = `<svg viewBox="0 0 24 24">${t.icon.map(d=>`<path d="${d}"/>`).join('')}</svg><span>${t.label}</span>`;
+        sideBtn.onclick = ()=> switchTab(t);
+        side.appendChild(sideBtn);
+      }
     });
   }
+  let sidebarCollapsed = false;
+  function toggleSidebar(){
+    sidebarCollapsed = !sidebarCollapsed;
+    document.body.classList.toggle('sidebar-collapsed', sidebarCollapsed);
+    $('#sidebarToggle').innerHTML = sidebarCollapsed
+      ? `<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>`
+      : `<svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>`;
+    $('#sidebarToggle').title = sidebarCollapsed ? '展开侧边栏' : '收起侧边栏';
+  }
+  $('#sidebarToggle').onclick = toggleSidebar;
   function switchTab(t){
     if(t.soon){ toast(`「${t.label}」模块还没开始搭建`); return; }
     activeTab = t.key;
     renderTabbar();
-    ['view-overview','view-courses','view-tasks','view-health','view-more'].forEach(id=>$('#'+id).classList.remove('active'));
+    ['view-overview','view-courses','view-tasks','view-health','view-review','view-more'].forEach(id=>$('#'+id).classList.remove('active'));
     $('#view-'+t.key).classList.add('active');
     $('#fabAdd').style.display = (t.key==='courses' || t.key==='tasks' || t.key==='health') ? 'flex' : 'none';
   }
@@ -1002,6 +1101,13 @@
   // ================= BIRTHDAYS =================
   const birthdaySheet = $('#birthdaySheet');
   let editingBirthdayId = null;
+  // 农历每个月最多30天，公历有7个月是31天，上限不能写死成30
+  function birthdayMaxDay(calendarType){ return calendarType==='lunar' ? 30 : 31; }
+  function syncBirthdayDayLimit(){
+    const max = birthdayMaxDay($('#f_b_calendar').value);
+    $('#f_b_day').max = max;
+    $('#f_b_day').placeholder = `1-${max}`;
+  }
   function openBirthdaySheet(existing){
     editingBirthdayId = existing ? existing.id : null;
     $('#birthdaySheetTitle').textContent = existing ? '编辑生日' : '新建生日';
@@ -1012,8 +1118,10 @@
     $('#f_b_remind').value = existing ? existing.remind_days_before : 3;
     $('#f_b_note').value = existing ? (existing.note||'') : '';
     $('#birthdaySheetDelete').style.display = existing ? 'block' : 'none';
+    syncBirthdayDayLimit();
     birthdaySheet.classList.add('open'); backdrop.classList.add('open');
   }
+  $('#f_b_calendar').onchange = syncBirthdayDayLimit;
   function closeBirthdaySheet(){ birthdaySheet.classList.remove('open'); backdrop.classList.remove('open'); }
   $('#addBirthdayRow').onclick = (e)=>{ e.stopPropagation(); openBirthdaySheet(null); };
   let birthdayMgmtOpen = false;
@@ -1023,9 +1131,10 @@
     const name = $('#f_b_name').value.trim();
     const month = parseInt($('#f_b_month').value, 10);
     const day = parseInt($('#f_b_day').value, 10);
+    const maxDay = birthdayMaxDay($('#f_b_calendar').value);
     if(!name){ toast('请填姓名'); return; }
     if(!month || month<1 || month>12){ toast('月份要在1-12之间'); return; }
-    if(!day || day<1 || day>30){ toast('日期要在1-30之间'); return; }
+    if(!day || day<1 || day>maxDay){ toast(`日期要在1-${maxDay}之间`); return; }
     const payload = {
       name, calendar_type: $('#f_b_calendar').value, month, day,
       remind_days_before: parseInt($('#f_b_remind').value, 10) || 0,
@@ -1035,7 +1144,8 @@
       const b = state.birthdays.find(x=>x.id===editingBirthdayId);
       if(b) Object.assign(b, payload);
     }else{
-      state.birthdays.push({ id: uid('bday'), ...payload });
+      // created_at 必须显式带上：批量upsert时缺这个字段的新行会被字段对齐填成null，撞上not-null约束（不能指望数据库默认值在批量场景生效）
+      state.birthdays.push({ id: uid('bday'), created_at: new Date().toISOString(), ...payload });
     }
     const ok = await saveState();
     if(!ok) return;
@@ -1067,9 +1177,13 @@
       const dateLabel = (b.calendar_type==='lunar'?'农历':'公历') + `${b.month}月${b.day}日`;
       return `<div class="more-row export" data-edit-bday="${b.id}">
         <span class="m-label">${esc(b.name)} · ${dateLabel}</span>
-        <button data-del-bday-quick="${b.id}" title="删除" style="border:none; background:none; color:var(--ink-2); font-size:17px; line-height:1; cursor:pointer; padding:2px 6px;">×</button>
+        <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
+          <span class="mono" data-countdown-id="${b.id}" style="font-size:12.5px; color:var(--accent-deep); white-space:nowrap;"></span>
+          <button data-del-bday-quick="${b.id}" title="删除" style="border:none; background:none; color:var(--ink-2); font-size:17px; line-height:1; cursor:pointer; padding:2px 4px;">×</button>
+        </div>
       </div>`;
     }).join('');
+    tickBirthdayCountdowns();
     wrap.querySelectorAll('[data-edit-bday]').forEach(row=>{
       row.onclick = ()=>{
         const b = state.birthdays.find(x=>x.id===row.dataset.editBday);
@@ -1089,6 +1203,94 @@
       };
     });
   }
+
+  function birthdayNextOccurrenceDate(b){
+    const now = new Date();
+    const todayStr = fmtDate(now);
+    let occStr = birthdayOccurrence(b, now.getFullYear());
+    if(occStr < todayStr) occStr = birthdayOccurrence(b, now.getFullYear()+1);
+    return new Date(occStr+'T00:00:00');
+  }
+  function tickBirthdayCountdowns(){
+    state.birthdays.forEach(b=>{
+      const el = document.querySelector(`[data-countdown-id="${b.id}"]`);
+      if(!el) return;
+      let diff = birthdayNextOccurrenceDate(b) - new Date();
+      if(diff <= 0){ el.textContent = '今天 🎂'; return; }
+      const days = Math.floor(diff/86400000); diff -= days*86400000;
+      const hours = Math.floor(diff/3600000); diff -= hours*3600000;
+      const mins = Math.floor(diff/60000); diff -= mins*60000;
+      const secs = Math.floor(diff/1000);
+      el.textContent = `${days}天 ${String(hours).padStart(2,'0')}:${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+    });
+  }
+  setInterval(tickBirthdayCountdowns, 1000);
+
+  // ================= 复盘 / 回顾 =================
+  let reviewPeriod = 'week';
+  function getReviewDateRange(){
+    const today = new Date();
+    const todayStr = fmtDate(today);
+    if(reviewPeriod==='week'){
+      const dow = (today.getDay()+6)%7; // 0=周一
+      return { start: addDays(todayStr, -dow), end: todayStr };
+    }
+    const y = today.getFullYear(), m = today.getMonth();
+    return { start: fmtDate(new Date(y,m,1)), end: todayStr };
+  }
+  function dateRangeArray(start, end){
+    const arr = [];
+    let d = start;
+    while(d <= end){ arr.push(d); d = addDays(d,1); }
+    return arr;
+  }
+  function renderReviewStats(){
+    const wrap = $('#reviewStats');
+    if(!wrap) return;
+    const { start, end } = getReviewDateRange();
+    const days = dateRangeArray(start, end);
+
+    let totalTaskInstances = 0, doneTaskInstances = 0;
+    days.forEach(ds=>{
+      dayTasks(ds).forEach(t=>{
+        totalTaskInstances++;
+        if(isTaskDone(t.task_id, ds)) doneTaskInstances++;
+      });
+    });
+    const taskRate = totalTaskInstances ? Math.round(doneTaskInstances/totalTaskInstances*100) : null;
+
+    const fitnessDone = days.filter(ds=>isFitnessDay(ds)).length;
+    const sugarDone = days.filter(ds=>isSugarDay(ds)).length;
+
+    let html = `<div class="fc-stat-row" style="flex-wrap:wrap; gap:20px;">
+      <div><div class="fc-num">${taskRate===null?'—':taskRate+'%'}</div><div class="fc-label">任务完成率${totalTaskInstances?`（${doneTaskInstances}/${totalTaskInstances}）`:''}</div></div>
+      <div><div class="fc-num">${fitnessDone}/${days.length}</div><div class="fc-label">健身天数</div></div>
+      <div><div class="fc-num">${sugarDone}/${days.length}</div><div class="fc-label">控糖天数</div></div>
+    </div>`;
+
+    if(state.supplements.length){
+      html += `<div style="font-size:11px; font-weight:600; color:var(--ink-2); margin:14px 0 6px;">补给依从度</div>`;
+      html += state.supplements.map(s=>{
+        const applicableDays = days.filter(ds => s.schedule_type==='daily' ? true : isFitnessDay(ds));
+        const takenDays = applicableDays.filter(ds => state.supplement_logs.some(l=>l.supplement_id===s.supplement_id && l.date===ds));
+        const pct = applicableDays.length ? Math.round(takenDays.length/applicableDays.length*100) : null;
+        return `<div style="display:flex; justify-content:space-between; font-size:13px; padding:6px 0; border-bottom:1px solid var(--hairline);">
+          <span>${esc(s.name)}</span>
+          <span style="color:var(--ink-2);">${pct===null?'本周期内没有应吃的天':`${takenDays.length}/${applicableDays.length}（${pct}%）`}</span>
+        </div>`;
+      }).join('');
+    }
+
+    wrap.innerHTML = html;
+  }
+  document.querySelectorAll('#reviewPeriodSegment button').forEach(b=>{
+    b.classList.toggle('sel', b.dataset.period===reviewPeriod);
+    b.onclick = ()=>{
+      reviewPeriod = b.dataset.period;
+      document.querySelectorAll('#reviewPeriodSegment button').forEach(x=>x.classList.toggle('sel', x.dataset.period===reviewPeriod));
+      renderReviewStats();
+    };
+  });
 
   // ================= LUNAR CALENDAR (农历换算，1900-2050) =================
   // 数据来源：通用的农历数据表算法，每个数字编码某年闰月月份+12个月大小月信息。
@@ -1289,6 +1491,49 @@
       });
     }
     renderHealthBlock();
+    renderOverviewPlanColumn();
+  }
+
+  // 桌面端总览页左栏"计划"：本周课程 + 长期任务，只在桌面分栏布局里显示，移动端不渲染这块内容也没关系（反正CSS也隐藏了）
+  function renderOverviewPlanColumn(){
+    const col = $('#ovPlanCol');
+    if(!col) return;
+    let html = `<div style="font-size:10px; font-weight:600; color:var(--ink-2); letter-spacing:0.05em; text-transform:uppercase; margin:0 20px 4px;">计划 · 这周 / 这月</div>`;
+
+    html += `<div class="section-head"><h2>本周课程</h2></div>`;
+    const weekRows = DAYS.map(d=>{
+      const sessions = state.sessions.filter(s=>s.day_of_week===d);
+      if(sessions.length===0) return '';
+      const names = [...new Set(sessions.map(s=>{
+        const c = state.courses.find(c=>c.course_id===s.course_id);
+        return c ? c.course_name : '';
+      }).filter(Boolean))].join('、');
+      if(!names) return '';
+      return `<div class="mgmt-row" style="cursor:default;">
+        <div class="c-body">
+          <div class="c-title">${esc(d)}</div>
+          <div class="c-sub">${esc(names)}</div>
+        </div>
+      </div>`;
+    }).filter(Boolean).join('');
+    html += weekRows ? `<div class="mgmt-list">${weekRows}</div>` : `<div class="empty-block">这周没有课</div>`;
+
+    html += `<div class="section-head"><h2>长期任务</h2></div>`;
+    const longterm = state.tasks.filter(t=>taskKindOf(t)==='longterm');
+    if(longterm.length===0){
+      html += `<div class="empty-block">还没有长期任务</div>`;
+    }else{
+      html += `<div class="mgmt-list">` + longterm.map(t=>`
+        <div class="mgmt-row" style="cursor:default;">
+          <div class="c-body">
+            <div class="c-title">${esc(t.title)}</div>
+            ${t.category ? `<div class="c-sub">${esc(t.category)}</div>` : ''}
+          </div>
+        </div>
+      `).join('') + `</div>`;
+    }
+
+    col.innerHTML = html;
   }
 
   function isFitnessDay(dateStr){ return state.fitness_days.some(f=>f.date===dateStr); }
@@ -1394,7 +1639,7 @@
 
   function toggleMonthView(open){
     monthViewOpen = open;
-    $('#ovDayMode').style.display = open ? 'none' : 'block';
+    $('#ovDayMode').style.display = open ? 'none' : ''; // 显示时清空内联样式交给CSS决定（手机是block，桌面靠媒体查询变grid）
     $('#ovMonthMode').style.display = open ? 'block' : 'none';
     $('#monthToggleBtn').textContent = open ? '✕' : '📅';
     $('#ovTitle').textContent = open ? '月历' : '今日安排';
@@ -1783,7 +2028,7 @@
     });
   }
 
-  function renderAll(){ renderOverview(); renderCourseMgmt(); renderTaskMgmt(); renderHealthMgmt(); }
+  function renderAll(){ renderOverview(); renderCourseMgmt(); renderTaskMgmt(); renderHealthMgmt(); renderReviewStats(); }
 
   // ================= HEALTH MANAGEMENT =================
   let expandedSuppId = null;
@@ -2015,7 +2260,7 @@
     selectedPriority = '无'; selectedRepeatDays = []; taskType = 'once';
   }
   $('#taskSheetCancel').onclick = closeTaskSheet;
-  backdrop.onclick = ()=>{ closeCourseSheet(); closeTaskSheet(); closeSuppSheet(); closeCanvasMapSheet(); $('#canvasPendingClose').click(); };
+  backdrop.onclick = ()=>{ closeCourseSheet(); closeTaskSheet(); closeSuppSheet(); closeCanvasMapSheet(); $('#canvasPendingClose').click(); $('#gmailPendingClose').click(); closeBirthdaySheet(); };
 
   function renderCourseSelect(){
     const sel = $('#f_t_course');
@@ -2186,10 +2431,12 @@
   function showApp(){
     $('#loginScreen').style.display = 'none';
     $('#phone').style.display = 'block';
+    $('#sidebarNav').style.display = ''; // 交回给 CSS 媒体查询决定：窄屏隐藏、桌面宽屏显示
   }
   function showLogin(){
     $('#loginScreen').style.display = 'flex';
     $('#phone').style.display = 'none';
+    $('#sidebarNav').style.display = 'none';
   }
   function validateLoginInput(){
     const email = $('#loginEmail').value.trim();
