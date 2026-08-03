@@ -429,6 +429,10 @@
     <div class="mgmt-list" id="taskListDaily"></div>
     <div class="section-head"><h2>一次性任务</h2></div>
     <div class="mgmt-list" id="taskListOnce"></div>
+    <div id="taskOverdueWrap" style="display:none;">
+      <div class="section-head"><h2>未完成</h2></div>
+      <div class="mgmt-list" id="taskListOverdue"></div>
+    </div>
     <div id="taskOnceHistoryToggle" style="display:none; align-items:center; gap:6px; margin:14px 20px 0; padding:6px 0; color:var(--ink-2); font-size:13px; cursor:pointer;">
       <span id="taskOnceHistoryArrow" style="display:inline-block; transition:transform 0.2s;">›</span>
       <span id="taskOnceHistoryLabel"></span>
@@ -2101,11 +2105,16 @@
     $('#taskStat').textContent = `共 ${state.tasks.length} 个任务`;
     const daily = state.tasks.filter(t=>taskKindOf(t)==='daily');
     const once = state.tasks.filter(t=>taskKindOf(t)==='once');
-    // 一次性任务在到期那天被勾完成后，归到下面折叠的"历史任务"里，不继续留在主列表里占地方
-    const onceActive = once.filter(t=> !isTaskDone(t.task_id, t.due_date));
+    const todayStr = fmtDate(new Date());
+    // 一次性任务：完成的归到下面折叠的"历史任务"；没完成但过了截止日的归到"未完成"；剩下的是主列表
     const onceHistory = once.filter(t=> isTaskDone(t.task_id, t.due_date));
+    const onceOverdue = once.filter(t=> !isTaskDone(t.task_id, t.due_date) && t.due_date && t.due_date < todayStr);
+    const onceActive = once.filter(t=> !isTaskDone(t.task_id, t.due_date) && !(t.due_date && t.due_date < todayStr));
     renderTaskGroup($('#taskListDaily'), daily, '还没有日常任务，点右下角「+」新建一个');
     renderTaskGroup($('#taskListOnce'), onceActive, '还没有一次性任务，点右下角「+」新建一个');
+
+    $('#taskOverdueWrap').style.display = onceOverdue.length ? 'block' : 'none';
+    if(onceOverdue.length) renderTaskGroup($('#taskListOverdue'), onceOverdue, '', true);
 
     const histToggle = $('#taskOnceHistoryToggle');
     const histList = $('#taskListOnceHistory');
@@ -2125,29 +2134,42 @@
   }
 
   let editingTaskId = null;
-  function renderTaskGroup(list, tasks, emptyMsg){
+  function renderTaskGroup(list, tasks, emptyMsg, checkable){
     if(tasks.length===0){
       list.innerHTML = `<div style="padding:24px 14px; text-align:center; color:var(--ink-2); font-size:13.5px;">${emptyMsg}</div>`;
       return;
     }
     list.innerHTML = '';
+    const todayStr = fmtDate(new Date());
     tasks.forEach(t=>{
       const course = state.courses.find(c=>c.course_id===t.related_course_id);
       const kind = taskKindOf(t);
       const timeLabel = taskTimeRangeLabel(t);
+      const isOverdue = kind==='once' && t.due_date && t.due_date < todayStr && !isTaskDone(t.task_id, t.due_date);
       const subtitle = kind==='daily'
         ? `每周${(t.repeat_days||[]).map(d=>d.replace('周','')).join('/')}` + (timeLabel?` · ${timeLabel}`:'') + (t.repeat_until?` · 至${t.repeat_until}`:'')
-        : (t.due_date ? `截止 ${t.due_date}${timeLabel?' '+timeLabel:''}` : '未设日期');
+        : (t.due_date ? `截止 ${t.due_date}${timeLabel?' '+timeLabel:''}${isOverdue?` · 逾期${daysBetweenDates(t.due_date, todayStr)}天`:''}` : '未设日期');
       const row = document.createElement('div');
       row.className = 'mgmt-row' + (expandedTaskId===t.task_id?' expanded':'');
+      const dotHtml = checkable
+        ? `<div class="t-check" data-check-task="${t.task_id}" style="margin-top:0;"></div>`
+        : `<div class="c-dot" style="background:${(t.priority==='高'||isOverdue)?'var(--danger)':'var(--ink-3)'};"></div>`;
       row.innerHTML = `
-        <div class="c-dot" style="background:${t.priority==='高'?'var(--danger)':'var(--ink-3)'};"></div>
+        ${dotHtml}
         <div class="c-body">
           <div class="c-title">${esc(t.title)}</div>
-          <div class="c-sub">${esc(subtitle)}${course?' · '+esc(course.course_name):''}</div>
+          <div class="c-sub"${isOverdue?' style="color:var(--danger);"':''}>${esc(subtitle)}${course?' · '+esc(course.course_name):''}</div>
         </div>
         <div class="chev">›</div>`;
       row.onclick = ()=>{ expandedTaskId = expandedTaskId===t.task_id?null:t.task_id; editingTaskId=null; renderTaskMgmt(); };
+      if(checkable){
+        row.querySelector('[data-check-task]').onclick = async (e)=>{
+          e.stopPropagation();
+          await toggleCompletion(t.task_id, t.due_date);
+          renderAll();
+          toast('已标记完成，移到"历史任务"');
+        };
+      }
       list.appendChild(row);
 
       const detail = document.createElement('div');
