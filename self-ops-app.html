@@ -737,7 +737,7 @@
     {key:'more', label:'更多', icon:['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z','M8.3 12h.01','M12 12h.01','M15.7 12h.01'], soon:false},
   ];
 
-  let state = { courses: [], sessions: [], tasks: [], completions: [], supplements: [], supplement_logs: [], meals: [], assignments: [], fitness_days: [], sugar_days: [], birthdays: [], fitness_categories: [], fitness_day_categories: [], gmail_scan_rules: [] };
+  let state = { courses: [], sessions: [], tasks: [], completions: [], supplements: [], supplement_logs: [], meals: [], assignments: [], fitness_days: [], sugar_days: [], birthdays: [], fitness_categories: [], fitness_day_categories: [], gmail_scan_rules: [], bbc_study_logs: [] };
   let selectedColor = COLORS[0];
   let selectedPriority = '无';
   let taskType = 'once';
@@ -772,7 +772,7 @@
   async function loadState(){
     if(!currentUser) return;
     try{
-      const [c,s,t,cp,sp,sl,fd,ml,ag,sd,bd,fc,fdc,gsr] = await Promise.all([
+      const [c,s,t,cp,sp,sl,fd,ml,ag,sd,bd,fc,fdc,gsr,bsl] = await Promise.all([
         sb.from('courses').select('*'),
         sb.from('course_sessions').select('*'),
         sb.from('tasks').select('*'),
@@ -787,6 +787,7 @@
         sb.from('fitness_categories').select('*'),
         sb.from('fitness_day_categories').select('*'),
         sb.from('gmail_scan_rules').select('*'),
+        sb.from('bbc_study_logs').select('*'),
       ]);
       state.courses = c.data || [];
       state.sessions = s.data || [];
@@ -802,6 +803,7 @@
       state.fitness_categories = fc.data || [];
       state.fitness_day_categories = fdc.data || [];
       state.gmail_scan_rules = gsr.data || [];
+      state.bbc_study_logs = bsl.data || [];
     }catch(e){ console.error(e); toast('数据加载失败，请检查网络后刷新'); }
   }
   // 数据库里date类型的字段不接受空字符串，必须转成null，否则整批写入会被拒绝
@@ -1412,6 +1414,11 @@
     while(d <= end){ arr.push(d); d = addDays(d,1); }
     return arr;
   }
+  function fmtDuration(sec){
+    const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60);
+    if(sec===0) return '0分钟';
+    return h>0 ? `${h}小时${m}分钟` : `${m}分钟`;
+  }
   function renderReviewStats(){
     const wrap = $('#reviewStats');
     if(!wrap) return;
@@ -1429,11 +1436,13 @@
 
     const fitnessDone = days.filter(ds=>isFitnessDay(ds)).length;
     const sugarDone = days.filter(ds=>isSugarDay(ds)).length;
+    const bbcSeconds = state.bbc_study_logs.filter(l=>l.date>=start && l.date<=end).reduce((sum,l)=>sum+(l.seconds||0), 0);
 
     let html = `<div class="fc-stat-row" style="flex-wrap:wrap; gap:20px;">
       <div><div class="fc-num">${taskRate===null?'—':taskRate+'%'}</div><div class="fc-label">任务完成率${totalTaskInstances?`（${doneTaskInstances}/${totalTaskInstances}）`:''}</div></div>
       <div><div class="fc-num">${fitnessDone}/${days.length}</div><div class="fc-label">健身天数</div></div>
       <div><div class="fc-num">${sugarDone}/${days.length}</div><div class="fc-label">控糖天数</div></div>
+      <div><div class="fc-num">${fmtDuration(bbcSeconds)}</div><div class="fc-label">BBC 听力时长</div></div>
     </div>`;
 
     if(state.supplements.length){
