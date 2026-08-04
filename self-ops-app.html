@@ -503,6 +503,11 @@
       <span id="fitnessCategorySectionArrow" style="display:inline-block; transition:transform 0.2s; font-size:14px; font-weight:500;">›</span>
     </div>
     <div class="more-group" id="fitnessCategoryGroup" style="display:none;"></div>
+    <div class="group-label" id="goalSectionToggle" style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;">
+      <span>学习目标</span>
+      <span id="goalSectionArrow" style="display:inline-block; transition:transform 0.2s; font-size:14px; font-weight:500;">›</span>
+    </div>
+    <div class="more-group" id="goalMgmtGroup" style="display:none;"></div>
     <div class="group-label">数据</div>
     <div class="more-group">
       <div class="more-row export" id="exportJsonRow"><span class="m-label">导出 JSON（全部数据）</span><span class="chev">›</span></div>
@@ -689,6 +694,22 @@
     </div>
   </div>
 
+  <!-- ===== STUDY GOAL SHEET ===== -->
+  <div class="sheet" id="goalSheet">
+    <div class="sheet-head">
+      <button class="sh-btn sh-cancel" id="goalSheetCancel">取消</button>
+      <div class="sh-title" id="goalSheetTitle">新建目标</div>
+      <button class="sh-btn sh-save" id="goalSheetSave">保存</button>
+    </div>
+    <div class="sheet-body">
+      <div class="f-group"><div class="f-row"><label>目标名称</label><input id="f_g_title" placeholder="如：英语学习"></div></div>
+      <div class="f-group"><div class="f-row"><label>目标小时数</label><input id="f_g_hours" type="number" min="0" placeholder="如：200"></div></div>
+      <div class="f-group"><div class="f-row"><label>截止日期</label><input id="f_g_date" type="date"></div></div>
+      <div class="cd-note">进度目前只统计 BBC 听力时长（累计全部记录，不分周/月）</div>
+      <div class="f-group"><button id="goalSheetDelete" style="display:none; width:100%; padding:10px; border-radius:10px; background:var(--danger-tint); color:var(--danger); border:none; font-size:13.5px; font-weight:600; cursor:pointer;">删除这个目标</button></div>
+    </div>
+  </div>
+
   <!-- ===== GMAIL RULE SHEET ===== -->
   <div class="sheet" id="gmailRuleSheet">
     <div class="sheet-head">
@@ -737,7 +758,7 @@
     {key:'more', label:'更多', icon:['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z','M8.3 12h.01','M12 12h.01','M15.7 12h.01'], soon:false},
   ];
 
-  let state = { courses: [], sessions: [], tasks: [], completions: [], supplements: [], supplement_logs: [], meals: [], assignments: [], fitness_days: [], sugar_days: [], birthdays: [], fitness_categories: [], fitness_day_categories: [], gmail_scan_rules: [], bbc_study_logs: [] };
+  let state = { courses: [], sessions: [], tasks: [], completions: [], supplements: [], supplement_logs: [], meals: [], assignments: [], fitness_days: [], sugar_days: [], birthdays: [], fitness_categories: [], fitness_day_categories: [], gmail_scan_rules: [], bbc_study_logs: [], study_goals: [] };
   let selectedColor = COLORS[0];
   let selectedPriority = '无';
   let taskType = 'once';
@@ -772,7 +793,7 @@
   async function loadState(){
     if(!currentUser) return;
     try{
-      const [c,s,t,cp,sp,sl,fd,ml,ag,sd,bd,fc,fdc,gsr,bsl] = await Promise.all([
+      const [c,s,t,cp,sp,sl,fd,ml,ag,sd,bd,fc,fdc,gsr,bsl,sg] = await Promise.all([
         sb.from('courses').select('*'),
         sb.from('course_sessions').select('*'),
         sb.from('tasks').select('*'),
@@ -788,6 +809,7 @@
         sb.from('fitness_day_categories').select('*'),
         sb.from('gmail_scan_rules').select('*'),
         sb.from('bbc_study_logs').select('*'),
+        sb.from('study_goals').select('*'),
       ]);
       state.courses = c.data || [];
       state.sessions = s.data || [];
@@ -804,6 +826,7 @@
       state.fitness_day_categories = fdc.data || [];
       state.gmail_scan_rules = gsr.data || [];
       state.bbc_study_logs = bsl.data || [];
+      state.study_goals = sg.data || [];
     }catch(e){ console.error(e); toast('数据加载失败，请检查网络后刷新'); }
   }
   // 数据库里date类型的字段不接受空字符串，必须转成null，否则整批写入会被拒绝
@@ -837,6 +860,7 @@
       if(state.fitness_categories.length) jobs.push(sb.from('fitness_categories').upsert(cleanRows(state.fitness_categories), {onConflict:'id'}));
       if(state.fitness_day_categories.length) jobs.push(sb.from('fitness_day_categories').upsert(cleanRows(state.fitness_day_categories), {onConflict:'id'}));
       if(state.gmail_scan_rules.length) jobs.push(sb.from('gmail_scan_rules').upsert(cleanRows(state.gmail_scan_rules), {onConflict:'id'}));
+      if(state.study_goals.length) jobs.push(sb.from('study_goals').upsert(cleanRows(state.study_goals), {onConflict:'id'}));
       const results = await Promise.all(jobs);
       const failed = results.find(r=>r.error);
       if(failed) throw failed.error;
@@ -895,6 +919,7 @@
     renderBirthdayMgmt();
     renderFitnessCategoryMgmt();
     renderGmailRuleMgmt();
+    renderGoalMgmt();
   }
   $('#signOutRow').onclick = async ()=>{
     if(!confirm('确定退出登录吗？')) return;
@@ -1279,6 +1304,78 @@
   }
   setInterval(tickBirthdayCountdowns, 1000);
 
+  // ================= 学习目标管理 =================
+  const goalSheet = $('#goalSheet');
+  let editingGoalId = null;
+  function openGoalSheet(existing){
+    editingGoalId = existing ? existing.id : null;
+    $('#goalSheetTitle').textContent = existing ? '编辑目标' : '新建目标';
+    $('#f_g_title').value = existing ? existing.title : '';
+    $('#f_g_hours').value = existing ? existing.target_hours : '';
+    $('#f_g_date').value = existing ? existing.target_date : '';
+    $('#goalSheetDelete').style.display = existing ? 'block' : 'none';
+    goalSheet.classList.add('open'); backdrop.classList.add('open');
+  }
+  function closeGoalSheet(){ goalSheet.classList.remove('open'); backdrop.classList.remove('open'); }
+  let goalMgmtOpen = false;
+  $('#goalSectionToggle').onclick = ()=>{ goalMgmtOpen = !goalMgmtOpen; renderGoalMgmt(); };
+  $('#goalSheetCancel').onclick = closeGoalSheet;
+  $('#goalSheetSave').onclick = async ()=>{
+    const title = $('#f_g_title').value.trim();
+    const target_hours = parseFloat($('#f_g_hours').value);
+    const target_date = $('#f_g_date').value;
+    if(!title){ toast('请填目标名称'); return; }
+    if(!target_hours || target_hours<=0){ toast('请填目标小时数'); return; }
+    if(!target_date){ toast('请选截止日期'); return; }
+    const payload = { title, target_hours, target_date };
+    if(editingGoalId){
+      const g = state.study_goals.find(x=>x.id===editingGoalId);
+      if(g) Object.assign(g, payload);
+    }else{
+      // created_at 必须显式带上：批量upsert时缺这个字段的新行会被字段对齐填成null，撞上not-null约束
+      state.study_goals.push({ id: uid('goal'), created_at: new Date().toISOString(), ...payload });
+    }
+    const ok = await saveState();
+    if(!ok) return;
+    closeGoalSheet();
+    renderGoalMgmt();
+    renderReviewStats();
+  };
+  $('#goalSheetDelete').onclick = async ()=>{
+    if(!editingGoalId) return;
+    const g = state.study_goals.find(x=>x.id===editingGoalId);
+    if(!confirm(`确定删除「${g?g.title:''}」这个目标吗？`)) return;
+    state.study_goals = state.study_goals.filter(x=>x.id!==editingGoalId);
+    await sb.from('study_goals').delete().eq('id', editingGoalId);
+    closeGoalSheet();
+    renderGoalMgmt();
+    renderReviewStats();
+  };
+  function renderGoalMgmt(){
+    const wrap = $('#goalMgmtGroup');
+    if(!wrap) return;
+    wrap.style.display = goalMgmtOpen ? '' : 'none';
+    const arrow = $('#goalSectionArrow');
+    if(arrow) arrow.style.transform = goalMgmtOpen ? 'rotate(90deg)' : '';
+    const addRowHtml = `<div class="more-row export" id="addGoalRow"><span class="m-label" style="color:var(--accent-deep);">+ 添加目标</span></div>`;
+    if(state.study_goals.length===0){
+      wrap.innerHTML = `<div class="more-row"><span class="m-label" style="color:var(--ink-2);">还没有添加目标</span></div>` + addRowHtml;
+    }else{
+      wrap.innerHTML = state.study_goals.map(g=>`
+        <div class="more-row export" data-edit-goal="${g.id}">
+          <span class="m-label">${esc(g.title)} · ${g.target_hours}小时 · 到${esc(g.target_date)}</span>
+        </div>
+      `).join('') + addRowHtml;
+      wrap.querySelectorAll('[data-edit-goal]').forEach(row=>{
+        row.onclick = ()=>{
+          const g = state.study_goals.find(x=>x.id===row.dataset.editGoal);
+          if(g) openGoalSheet(g);
+        };
+      });
+    }
+    $('#addGoalRow').onclick = (e)=>{ e.stopPropagation(); openGoalSheet(null); };
+  }
+
   // ================= Gmail 扫描规则管理 =================
   const gmailRuleSheet = $('#gmailRuleSheet');
   let editingGmailRuleId = null;
@@ -1454,6 +1551,26 @@
         return `<div style="display:flex; justify-content:space-between; font-size:13px; padding:6px 0; border-bottom:1px solid var(--hairline);">
           <span>${esc(s.name)}</span>
           <span style="color:var(--ink-2);">${pct===null?'本周期内没有应吃的天':`${takenDays.length}/${applicableDays.length}（${pct}%）`}</span>
+        </div>`;
+      }).join('');
+    }
+
+    if(state.study_goals.length){
+      // 目标进度算全部历史累计（不受本周/本月切换影响），目前只统计 BBC 听力时长这一个数据源
+      const totalBbcHours = state.bbc_study_logs.reduce((sum,l)=>sum+(l.seconds||0), 0) / 3600;
+      const todayStr = fmtDate(new Date());
+      html += `<div style="font-size:11px; font-weight:600; color:var(--ink-2); margin:14px 0 6px;">学习目标</div>`;
+      html += state.study_goals.map(g=>{
+        const pct = g.target_hours ? Math.min(100, Math.round(totalBbcHours/g.target_hours*100)) : 0;
+        const daysLeft = daysBetweenDates(todayStr, g.target_date);
+        const daysLabel = daysLeft>0 ? `还剩${daysLeft}天` : (daysLeft===0 ? '就是今天' : `已过期${-daysLeft}天`);
+        return `<div style="padding:10px 0; border-bottom:1px solid var(--hairline);">
+          <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px;">
+            <span>${esc(g.title)}</span>
+            <span style="color:var(--ink-2);">${daysLabel}</span>
+          </div>
+          <div style="font-size:12px; color:var(--ink-2); margin-bottom:6px;">已学习 ${totalBbcHours.toFixed(1)} / ${g.target_hours} 小时（${pct}%）</div>
+          <div class="progress-bar"><div class="progress-bar-fill" style="width:${pct}%;"></div></div>
         </div>`;
       }).join('');
     }
@@ -2504,7 +2621,7 @@
     selectedPriority = '无'; selectedRepeatDays = []; taskType = 'once';
   }
   $('#taskSheetCancel').onclick = closeTaskSheet;
-  backdrop.onclick = ()=>{ closeCourseSheet(); closeTaskSheet(); closeSuppSheet(); closeCanvasMapSheet(); $('#canvasPendingClose').click(); $('#gmailPendingClose').click(); closeBirthdaySheet(); closeGmailRuleSheet(); };
+  backdrop.onclick = ()=>{ closeCourseSheet(); closeTaskSheet(); closeSuppSheet(); closeCanvasMapSheet(); $('#canvasPendingClose').click(); $('#gmailPendingClose').click(); closeBirthdaySheet(); closeGmailRuleSheet(); closeGoalSheet(); };
 
   function renderCourseSelect(){
     const sel = $('#f_t_course');
