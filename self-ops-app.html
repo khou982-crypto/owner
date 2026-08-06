@@ -1564,12 +1564,22 @@
         const pct = g.target_hours ? Math.min(100, Math.round(totalBbcHours/g.target_hours*100)) : 0;
         const daysLeft = daysBetweenDates(todayStr, g.target_date);
         const daysLabel = daysLeft>0 ? `还剩${daysLeft}天` : (daysLeft===0 ? '就是今天' : `已过期${-daysLeft}天`);
+        // 配速：剩余小时 ÷ 剩余可用天数（含今天，所以 +1，目标日当天也能学）
+        const remainHours = (g.target_hours||0) - totalBbcHours;
+        const daysUsable = daysLeft + 1;
+        let paceLabel;
+        if(remainHours <= 0) paceLabel = '目标已完成 🎉';
+        else if(daysUsable <= 0) paceLabel = `已过期，还差 ${remainHours.toFixed(1)} 小时`;
+        else paceLabel = `每天需 ${fmtDuration(Math.round(remainHours*3600/daysUsable/60)*60)}`;
         return `<div style="padding:10px 0; border-bottom:1px solid var(--hairline);">
           <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px;">
             <span>${esc(g.title)}</span>
             <span style="color:var(--ink-2);">${daysLabel}</span>
           </div>
-          <div style="font-size:12px; color:var(--ink-2); margin-bottom:6px;">已学习 ${totalBbcHours.toFixed(1)} / ${g.target_hours} 小时（${pct}%）</div>
+          <div style="display:flex; justify-content:space-between; gap:8px; font-size:12px; color:var(--ink-2); margin-bottom:6px;">
+            <span>已学习 ${totalBbcHours.toFixed(1)} / ${g.target_hours} 小时（${pct}%）</span>
+            <span>${paceLabel}</span>
+          </div>
           <div class="progress-bar"><div class="progress-bar-fill" style="width:${pct}%;"></div></div>
         </div>`;
       }).join('');
